@@ -10,7 +10,7 @@ import { drawSnapIndicator } from '../Snapper.js';
 import { collectMoveRefs, collectPointRefs } from '../../model/operations.js';
 import { getEntity } from '../../model/project.js';
 import { snapToWall, itemSnapsToWall, findWallForOpening } from '../placement.js';
-import { DEFAULTS } from '../../model/defaults.js';
+import { alignRect, drawAlign, snapWallOffset, drawWallOffset, drawOpeningSnap } from '../smartSnap.js';
 import { add, sub, mul, dot, dist, snapValue, toWorld, toLocal, DEG, normalizeDeg, mid } from '../../core/geometry.js';
 import { fmtLen, fmtAngle } from '../../core/format.js';
 import { drawOpening } from '../render/drawOpenings.js';
@@ -32,6 +32,9 @@ export class SelectTool extends Tool {
     this.snap = null;
     this.marquee = null;
     this.info = null;
+    this.align = null;
+    this.wallSnap = null;
+    this.openingSnap = null;
     this.render();
   }
 
@@ -138,6 +141,9 @@ export class SelectTool extends Tool {
     this.mode = null;
     this.snap = null;
     this.info = null;
+    this.align = null;
+    this.wallSnap = null;
+    this.openingSnap = null;
     if (!e.touch) this._hover(e);
     this.render();
   }
@@ -221,6 +227,8 @@ export class SelectTool extends Tool {
     const s = this.single;
     this.info = null;
     this.snap = null;
+    this.align = null;
+    this.wallSnap = null;
     let rotation = null;
 
     if (s?.ref.kind === 'wall' && !e.shift) {
@@ -232,24 +240,28 @@ export class SelectTool extends Tool {
       const b = ref2.orig;
       const L = dist(a, b) || 1;
       const n = { x: -(b.y - a.y) / L, y: (b.x - a.x) / L };
-      const k = snapValue(dot(delta, n), e.alt ? 0.001 : this.editor.gridStep);
+      const g0 = { wall: w, a, b, d: { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, n, len: L, half: w.thickness / 2 };
+      const ws = snapWallOffset(this.editor, g0, dot(delta, n), { disabled: e.alt });
+      const k = ws.k;
       delta = mul(n, k);
-      this.info = { p: mid(add(a, delta), add(b, delta)), text: `сдвиг ${fmtLen(Math.abs(k))}` };
+      this.wallSnap = ws;
+      this.info = { p: mid(add(a, delta), add(b, delta)), text: `сдвиг ${fmtLen(Math.abs(k))}${ws.label ? ` · ${ws.label}` : ''}` };
     } else if (s && (s.ref.kind === 'item' || s.ref.kind === 'stair' || s.ref.kind === 'roof')) {
       const orig = this.refs[0].orig;
       let c = add(orig, delta);
       let snapped = null;
       if (s.ref.kind === 'item' && itemSnapsToWall(s.e) && !e.alt) {
-        snapped = snapToWall(this.editor, c, s.e.d, s.e.w);
+        snapped = snapToWall(this.editor, c, s.e.d, s.e.w, { ignoreId: s.e.id });
       }
       if (snapped) {
         c = snapped;
         rotation = snapped.rotation;
-      } else if (!e.alt) {
-        const sn = this.editor.snapper.snap(c, { walls: false, itemPoints: false, radiusPx: 8 });
-        c = { x: snapValue(c.x, this.editor.gridStep), y: snapValue(c.y, this.editor.gridStep) };
-        if (sn.guides.length) c = sn.point;
-        this.snap = sn.guides.length ? sn : null;
+        this.align = { labels: snapped.label ? [snapped.label] : [], guides: [], dims: [], at: c };
+      } else {
+        const dims = s.ref.kind === 'stair' ? { w: s.e.width, d: s.e.length } : { w: s.e.w, d: s.e.d };
+        const al = alignRect(this.editor, { kind: s.ref.kind, id: s.e.id, x: c.x, y: c.y, ...dims, rotation: s.rot, levelId: s.e.levelId }, { disabled: e.alt });
+        c = { x: al.x, y: al.y };
+        this.align = { ...al, at: c };
       }
       delta = sub(c, orig);
     } else if (!e.alt) {
@@ -266,8 +278,9 @@ export class SelectTool extends Tool {
   _moveOpening(e) {
     const o = getEntity(this.project, 'opening', this.opening.id);
     if (!o) return;
-    const found = findWallForOpening(this.editor, e.world, o.width, o.id);
+    const found = findWallForOpening(this.editor, e.world, o.width, o.id, { kind: o.kind, disabled: e.alt });
     this.openingOk = !!found?.ok;
+    this.openingSnap = found?.ok ? found.snap : null;
     if (!found || !found.ok) {
       this.render();
       return;
@@ -385,11 +398,14 @@ export class SelectTool extends Tool {
       ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
       ctx.restore();
     }
-    if (this.mode === 'opening' && this.openingOk === false) {
+    if (this.mode === 'opening') {
       const o = getEntity(this.project, 'opening', this.opening?.id);
       const g = o && r.geoms.get(o.wallId);
-      if (g) drawOpening(ctx, r, g, o, { ghost: true });
+      if (g && this.openingOk === false) drawOpening(ctx, r, g, o, { ghost: true });
+      else if (g && this.openingSnap) drawOpeningSnap(ctx, r, g, o, this.openingSnap);
     }
+    if (this.mode === 'move' && this.align) drawAlign(ctx, r, this.align, this.align.at);
+    if (this.mode === 'move' && this.wallSnap) drawWallOffset(ctx, r, this.wallSnap);
     if (this.snap) drawSnapIndicator(ctx, r, this.snap, THEME);
     if (this.info) {
       const p = this.info.offset ? add(this.info.p, { x: r.px(14), y: r.px(-14) }) : this.info.p;

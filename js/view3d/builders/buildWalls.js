@@ -6,6 +6,7 @@ import { COLORS } from '../../model/defaults.js';
 import { extrudePolygon, mergeGeometries, mesh } from '../meshUtils.js';
 import { mat } from '../materials.js';
 import { buildOpening } from './buildOpenings.js';
+import { porchSteps } from '../../geometry/porch.js';
 
 export function buildWalls(project, levelId, base, { ground = false } = {}) {
   const group = new THREE.Group();
@@ -38,6 +39,16 @@ export function buildWalls(project, levelId, base, { ground = false } = {}) {
     const m = mesh(pg, mat(COLORS.plinth, { roughness: 0.95 }));
     m.userData.edges = true;
     group.add(m);
+  }
+  // крыльцо у наружных дверей, если пол поднят на цоколь
+  if (ground) {
+    const steps = porchSteps(project, levelId, geoms, base).map((st) => extrudePolygon(st.poly, 0, st.top));
+    const sg = mergeGeometries(steps);
+    if (sg) {
+      const m = mesh(sg, mat('#b7b1a7', { roughness: 0.9 }));
+      m.userData.edges = true;
+      group.add(m);
+    }
   }
   return group;
 }

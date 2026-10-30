@@ -155,6 +155,19 @@ export class App {
     });
   }
 
+  /**
+   * Прогулка манекеном. На ПК план остаётся рядом (видно, где манекен),
+   * на телефоне и планшете — 3D на весь экран.
+   * @param at — точка плана, куда поставить манекена
+   */
+  async walk(at = null) {
+    if (this.state.viewMode === 'plan') await this.setViewMode(this.state.layout === 'desktop' ? 'split' : '3d');
+    const v = await this.ensure3D();
+    if (!v) return;
+    v.setVisible(true);
+    v.startWalk({ at });
+  }
+
   /** Ленивая загрузка 3D-модуля (Three.js ~700 КБ) — план открывается мгновенно. */
   ensure3D() {
     if (this.view3d) return Promise.resolve(this.view3d);

@@ -3,7 +3,8 @@
  * Каждая команда — один шаг истории.
  */
 import { getEntity, removeEntity, removeLevel, createLevel, levelIndex, createEmptyProject, normalizeProject, SITE_LEVEL } from '../model/project.js';
-import { copyLevelLayout, duplicateEntities, autoRoofRect } from '../model/operations.js';
+import { copyLevelLayout, duplicateEntities, autoRoofRect, splitRoomInHalf } from '../model/operations.js';
+import { fmtLen } from '../core/format.js';
 import { createRoom, createRoof } from '../model/factories.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { pointInPolygon, polygonLabelPoint, normalizeDeg, rotate, DEG, bboxOf } from '../core/geometry.js';
@@ -222,6 +223,15 @@ export class Commands {
   // ── Комнаты и крыши ────────────────────────────────────────────────────
 
   /** Найти все замкнутые контуры и создать/обновить комнаты, сохраняя названия. */
+  /** Перегородка ровно посередине комнаты. */
+  splitRoom(roomId, orientation = 'auto') {
+    let res = null;
+    this.store.commit((p) => (res = splitRoomInHalf(p, roomId, orientation)));
+    if (!res) return this.app.toast('Не получилось: комната должна быть окружена стенами', 'warn');
+    this.state.select({ kind: 'wall', id: res.wall.id });
+    this.app.toast(`Комната разделена пополам: по ${fmtLen(res.widths[0])} в чистоте`, 'info', this._undoAction());
+  }
+
   autoRooms(levelId = this.state.activeLevelId) {
     const faces = findFaces(this.project.walls.filter((w) => w.levelId === levelId));
     if (!faces.length) return this.app.toast('Замкнутых контуров стен не найдено', 'warn');

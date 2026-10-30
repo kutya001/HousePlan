@@ -1,5 +1,4 @@
 /** Крыши на плане — пунктирный контур со свесом, конёк и рёбра. */
-import { THEME } from './theme.js';
 import { roofGeometry, shedArrow } from '../../geometry/roofGeometry.js';
 import { ROOF_TYPES } from '../../model/defaults.js';
 import { add, sub, mul, norm, perp } from '../../core/geometry.js';

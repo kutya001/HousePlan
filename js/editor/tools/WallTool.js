@@ -20,7 +20,7 @@ export class WallTool extends Tool {
     this.name = 'Стена';
     this.cursor = 'crosshair';
     this.hint =
-      'Клик — начало стены, клик — следующая точка. Цепочка закончится сама, когда упрётесь в стену; иначе — двойной клик, Enter или правая кнопка. Наберите число и Enter — точная длина в метрах. Shift — углы по 45°, Alt — без привязок.';
+      'Клик — начало стены, клик — следующая точка. Курсор сам встаёт на середину стены (▲) и на линию центра комнаты — так комната делится ровно пополам. Цепочка закончится сама, когда упрётесь в стену. Число + Enter — точная длина. Shift — углы по 45°, Alt — без привязок.';
     this.settings = { kind: 'exterior', thickness: DEFAULTS.wall.exterior.thickness, height: null };
     this.options = [
       { key: 'kind', label: 'Тип', type: 'segmented', options: WALL_KINDS },

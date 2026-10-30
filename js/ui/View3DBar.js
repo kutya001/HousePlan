@@ -13,7 +13,7 @@ export class View3DBar {
   constructor(app, root) {
     this.app = app;
     const btn = (ic, label, fn, tip) => h('button', { class: 'v3-btn', 'data-tip': tip || label, 'aria-label': label, onclick: fn }, icon(ic, 18), h('span', {}, label));
-    this.walkBtn = btn('walk', 'Прогулка', () => this._walk(), 'Ходить по дому: WASD, мышь — смотреть, Esc — выйти');
+    this.walkBtn = btn('person', 'Прогулка', () => this._walk(), 'Пройтись по дому манекеном 170 см: ходить, бегать, прыгать, подниматься по лестнице, садиться, открывать двери');
     this.toggles = TOGGLES.map(([key, ic, label, tip]) => {
       const b = btn(ic, label, () => app.state.setSetting(key, !app.state.settings[key]), tip);
       b.classList.add('toggle');
@@ -36,18 +36,19 @@ export class View3DBar {
     app.bus.on('settings:changed', () => this.sync());
     app.bus.on('walk:changed', ({ walking }) => {
       this.walkHint.textContent = app.state.coarse
-        ? 'Джойстик — идти, палец по экрану — оглядеться'
-        : 'W A S D — идти, Shift — быстрее, мышь — оглядеться, Esc — выйти';
+        ? 'Джойстик — идти (до края — бегом), палец по экрану — оглядеться, касание — выбрать объект'
+        : 'Тяните мышью — осмотреться, клик — выбрать объект и править его. Двери открываются сами, если в них упереться';
       this.walkHint.hidden = !walking;
       document.body.classList.toggle('walking', walking);
       this.walkBtn.classList.toggle('active', walking);
-      if (walking) setTimeout(() => (this.walkHint.hidden = true), 6000);
+      clearTimeout(this._hintTimer);
+      if (walking) this._hintTimer = setTimeout(() => (this.walkHint.hidden = true), 7000);
     });
     this.sync();
   }
 
   _walk() {
-    this.app.view3d?.startWalk();
+    this.app.walk();
   }
 
   sync() {

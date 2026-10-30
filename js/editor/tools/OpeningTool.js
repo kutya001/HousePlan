@@ -1,6 +1,7 @@
 /**
  * Двери, окна и проёмы. Наведите на стену — появится превью с расстояниями
- * до углов; клик — установить. Проём прилипает к центру стены.
+ * до углов комнаты; клик — установить. Проём сам встаёт по центру стены
+ * или простенка, симметрично соседнему, над окном нижнего этажа и т. п.
  */
 import { Tool } from './Tool.js';
 import { THEME } from '../render/theme.js';
@@ -8,13 +9,13 @@ import { createOpening } from '../../model/factories.js';
 import { DEFAULTS, OPENING_STYLES, OPENING_KINDS } from '../../model/defaults.js';
 import { findWallForOpening } from '../placement.js';
 import { drawOpening, openingFrame } from '../render/drawOpenings.js';
-import { dimLine } from '../render/drawDimensions.js';
-import { add, mul, dot, sub } from '../../core/geometry.js';
+import { drawOpeningSnap } from '../smartSnap.js';
+import { dot, sub } from '../../core/geometry.js';
 
 const HINTS = {
-  door: 'Наведите на стену и кликните — дверь встанет туда. Сторона открывания — по положению курсора относительно стены. X — сменить сторону петель.',
-  window: 'Наведите на стену и кликните. Высоту подоконника и размеры задайте сверху или потом в свойствах.',
-  arch: 'Проём без двери: наведите на стену и кликните.',
+  door: 'Наведите на стену и кликните. Дверь прилипает к центру стены, к углу (10 см) и к оси соседних проёмов. Сторона открывания — по курсору, X — петли. Alt — без привязок.',
+  window: 'Наведите на стену и кликните. Окно встаёт по центру комнаты, простенка, симметрично соседнему или над окном нижнего этажа. Alt — без привязок.',
+  arch: 'Проём без двери: наведите на стену и кликните. Alt — без привязок.',
 };
 
 export class OpeningTool extends Tool {
@@ -63,7 +64,7 @@ export class OpeningTool extends Tool {
 
   pointerMove(e) {
     const s = this.settings;
-    const found = findWallForOpening(this.editor, e.world, s.width);
+    const found = findWallForOpening(this.editor, e.world, s.width, null, { kind: this.kind, disabled: e.alt });
     if (!found) {
       this.preview = null;
       this.render();
@@ -79,7 +80,7 @@ export class OpeningTool extends Tool {
       flipSide: !side,
       flipHinge: s.flipHinge,
     });
-    this.preview = { g: found.g, o, ok: found.ok && s.width < found.g.len - 0.1 };
+    this.preview = { g: found.g, o, ok: found.ok && s.width < found.g.len - 0.1, snap: found.snap };
     this.render();
   }
 
@@ -144,9 +145,7 @@ export class OpeningTool extends Tool {
     ctx.fill();
     ctx.restore();
     if (pv.ok) drawOpening(ctx, r, g, o, { ghost: true });
-    const nn = mul(g.n, g.half);
-    dimLine(ctx, r, add(g.a, nn), add(f.A0, nn), g.n, 18, true);
-    dimLine(ctx, r, add(f.A1, nn), add(g.b, nn), g.n, 18, true);
+    drawOpeningSnap(ctx, r, g, o, pv.ok ? pv.snap : { ...pv.snap, label: null });
     if (!pv.ok) r.label(ctx, f.center, 'не помещается', { size: 11, color: THEME.danger, weight: 600 });
   }
 }

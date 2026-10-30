@@ -29,6 +29,8 @@ export class SelectionBar {
     const items = [h('span', { class: 'sel-name' }, name), btn('panel', 'Свойства', () => app.ui.side.open('properties'), 'primary')];
     if (one?.kind === 'opening') {
       items.push(btn('flip', 'Сторона', () => c.flipOpening(false)), btn('flip', 'Петли', () => c.flipOpening(true)));
+    } else if (one?.kind === 'room') {
+      items.push(btn('wall', 'Пополам', () => c.splitRoom(one.id)));
     } else if (!one || one.kind !== 'site') {
       items.push(btn('copy', 'Копия', () => c.duplicate()));
       if (!one || ['item', 'stair', 'roof', 'wall', 'zone', 'room'].includes(one.kind)) items.push(btn('rotate', '90°', () => c.rotateSelection(90)));

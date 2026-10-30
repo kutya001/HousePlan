@@ -9,7 +9,8 @@ import { findFaces } from '../geometry/roomDetect.js';
 import { createWall, createRoom, createOpening, createRoof } from './factories.js';
 import { createLevel, getLevel, levelIndex, COLLECTION, getEntity, SITE_LEVEL } from './project.js';
 import { DEFAULTS } from './defaults.js';
-import { JOIN_EPS } from '../geometry/wallGeometry.js';
+import { JOIN_EPS, computeWallGeometry } from '../geometry/wallGeometry.js';
+import { rayToWalls, rayToWallAxes } from '../geometry/alignment.js';
 
 /** Гарантирует, что существует этаж с индексом index; возвращает его. */
 export function ensureLevel(project, index, template = null) {
@@ -386,6 +387,53 @@ export function syncRoomsWithWalls(project, levelId) {
     }
   }
   return added;
+}
+
+/**
+ * Делит комнату перегородкой ровно пополам — по середине между гранями стен.
+ * @param orientation 'auto' | 'vertical' (стена вдоль Y) | 'horizontal' (вдоль X)
+ * @returns {{ wall, widths:[number, number] } | null}
+ */
+export function splitRoomInHalf(project, roomId, orientation = 'auto') {
+  const room = project.rooms.find((r) => r.id === roomId);
+  if (!room) return null;
+  const geoms = computeWallGeometry(project.walls.filter((w) => w.levelId === room.levelId));
+  const p = polygonLabelPoint(room.points);
+  const L = rayToWalls(geoms, p, { x: -1, y: 0 });
+  const R = rayToWalls(geoms, p, { x: 1, y: 0 });
+  const U = rayToWalls(geoms, p, { x: 0, y: -1 });
+  const D = rayToWalls(geoms, p, { x: 0, y: 1 });
+  let vertical = orientation === 'vertical';
+  if (orientation === 'auto') vertical = L && R && U && D ? L.t + R.t >= U.t + D.t : !!(L && R);
+  const th = DEFAULTS.wall.interior.thickness;
+  let a;
+  let b;
+  let widths;
+  if (vertical) {
+    if (!L || !R) return null;
+    const c = { x: p.x + (R.t - L.t) / 2, y: p.y };
+    const up = rayToWallAxes(geoms, c, { x: 0, y: -1 });
+    const down = rayToWallAxes(geoms, c, { x: 0, y: 1 });
+    if (!up || !down) return null;
+    a = up.point;
+    b = down.point;
+    const half = (L.t + R.t - th) / 2;
+    widths = [half, half];
+  } else {
+    if (!U || !D) return null;
+    const c = { x: p.x, y: p.y + (D.t - U.t) / 2 };
+    const left = rayToWallAxes(geoms, c, { x: -1, y: 0 });
+    const right = rayToWallAxes(geoms, c, { x: 1, y: 0 });
+    if (!left || !right) return null;
+    a = left.point;
+    b = right.point;
+    const half = (U.t + D.t - th) / 2;
+    widths = [half, half];
+  }
+  const wall = createWall(room.levelId, a, b, { kind: 'interior', thickness: th });
+  project.walls.push(wall);
+  syncRoomsWithWalls(project, room.levelId);
+  return { wall, widths, vertical };
 }
 
 /** Нормализует ориентацию многоугольника (против часовой — положительная площадь). */

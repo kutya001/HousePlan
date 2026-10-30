@@ -8,11 +8,11 @@ import { createItem, createStair } from '../../model/factories.js';
 import { catalogItem } from '../../model/catalog.js';
 import { STAIR_SHAPES } from '../../model/defaults.js';
 import { snapToWall } from '../placement.js';
+import { alignRect, drawAlign } from '../smartSnap.js';
 import { drawItemSymbol } from '../render/symbols2d.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { stairRise } from '../render/drawStairs.js';
-import { snapValue, normalizeDeg } from '../../core/geometry.js';
-import { DEFAULTS } from '../../model/defaults.js';
+import { normalizeDeg } from '../../core/geometry.js';
 import { levelAbove } from '../../model/project.js';
 
 export class PlaceTool extends Tool {
@@ -23,12 +23,12 @@ export class PlaceTool extends Tool {
     this.cursor = 'crosshair';
     if (what === 'stair') {
       this.name = 'Лестница';
-      this.hint = 'Кликните, чтобы поставить лестницу. R — повернуть на 90°. Подъём идёт по стрелке на следующий этаж.';
+      this.hint = 'Кликните, чтобы поставить лестницу. Она прилипает к стенам, к центру комнаты и к краям соседних объектов. R — повернуть на 90°, Alt — без привязок.';
       this.settings = { shape: 'straight', rotation: 0 };
       this.options = [{ key: 'shape', label: 'Форма', type: 'segmented', options: STAIR_SHAPES }];
     } else {
       this.name = 'Мебель';
-      this.hint = 'Выберите предмет в каталоге справа и кликните на плане. Мебель прижимается к стенам. R — повернуть, Alt — без прилипания.';
+      this.hint = 'Выберите предмет в каталоге и кликните на плане. Мебель прижимается к стене, встаёт по её центру, в угол, под окно или вплотную к соседу. R — повернуть, Alt — без привязок.';
       this.settings = { type: 'sofa', rotation: 0 };
       this.options = [];
     }
@@ -65,26 +65,30 @@ export class PlaceTool extends Tool {
 
   _build(e) {
     const p = e.world;
+    this.align = null;
+    let obj;
     if (this.what === 'stair') {
-      const s = createStair(this.levelId, snapValue(p.x, this.editor.gridStep), snapValue(p.y, this.editor.gridStep), {
-        shape: this.settings.shape,
-        rotation: this.settings.rotation,
-      });
-      return s;
-    }
-    const it = createItem(this.levelId, this.settings.type, snapValue(p.x, this.editor.gridStep), snapValue(p.y, this.editor.gridStep), {
-      rotation: this.settings.rotation,
-    });
-    if (catalogItem(it.type)?.wallSnap && !e.alt) {
-      const sn = snapToWall(this.editor, p, it.d, it.w);
-      if (sn) {
-        it.x = sn.x;
-        it.y = sn.y;
-        it.rotation = sn.rotation;
-        it._snapped = true;
+      obj = createStair(this.levelId, p.x, p.y, { shape: this.settings.shape, rotation: this.settings.rotation });
+    } else {
+      obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation });
+      if (catalogItem(obj.type)?.wallSnap && !e.alt) {
+        const sn = snapToWall(this.editor, p, obj.d, obj.w);
+        if (sn) {
+          obj.x = sn.x;
+          obj.y = sn.y;
+          obj.rotation = sn.rotation;
+          obj._snapped = true;
+          this.align = { labels: sn.label ? [sn.label] : [], guides: [], dims: [] };
+          return obj;
+        }
       }
     }
-    return it;
+    const dims = this.what === 'stair' ? { w: obj.width, d: obj.length } : { w: obj.w, d: obj.d };
+    const al = alignRect(this.editor, { kind: this.what, id: obj.id, x: p.x, y: p.y, ...dims, rotation: obj.rotation, levelId: obj.levelId }, { disabled: e.alt });
+    obj.x = al.x;
+    obj.y = al.y;
+    this.align = al;
+    return obj;
   }
 
   get shortHint() {
@@ -132,6 +136,7 @@ export class PlaceTool extends Tool {
   placeAt(e) {
     const obj = this._build(e);
     delete obj._snapped;
+    this.align = null;
     const isStair = this.what === 'stair';
     this.store.commit((p) => (isStair ? p.stairs : p.items).push(obj));
     this.state.select({ kind: isStair ? 'stair' : 'item', id: obj.id });
@@ -168,9 +173,11 @@ export class PlaceTool extends Tool {
       ctx.lineWidth = r.px(1.6);
       ctx.stroke();
       ctx.restore();
+      drawAlign(ctx, r, this.align, g);
       return;
     }
     drawItemSymbol(ctx, g, r.px(1.1), { alpha: 0.7 });
+    drawAlign(ctx, r, this.align, g);
     if (g._snapped) {
       ctx.save();
       ctx.translate(g.x, g.y);

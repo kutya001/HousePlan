@@ -46,6 +46,12 @@ export class Editor2D {
       this.requestRender();
     });
     for (const evt of ['selection:changed', 'level:changed', 'settings:changed']) bus.on(evt, () => this.requestRender());
+    // манекен на плане во время прогулки
+    this.character = null;
+    bus.on('character:moved', (ch) => {
+      this.character = ch.active ? ch : null;
+      this.requestRender();
+    });
 
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(container);

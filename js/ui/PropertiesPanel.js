@@ -83,6 +83,8 @@ export class PropertiesPanel {
     if (ref.kind === 'opening') {
       list.push(btn('flip', 'Сторона', () => c.flipOpening(false)));
       list.push(btn('flip', 'Петли', () => c.flipOpening(true)));
+    } else if (ref.kind === 'room') {
+      list.push(btn('wall', 'Разделить пополам', () => c.splitRoom(ref.id)));
     } else if (ref.kind !== 'site') {
       list.push(btn('copy', 'Копия', () => c.duplicate()));
       if (['item', 'stair', 'roof', 'wall', 'room', 'zone'].includes(ref.kind)) list.push(btn('rotate', '90°', () => c.rotateSelection(90)));

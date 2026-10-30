@@ -1,10 +1,11 @@
 /**
- * 3D-просмотр: орбитальная камера, режим «прогулки» от первого лица,
- * выбор объектов кликом, подсветка выделения, тени.
+ * 3D-просмотр: орбитальная камера, прогулка манекеном (от третьего и первого лица),
+ * открывание дверей, выбор объектов кликом, подсветка выделения, тени.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { WalkControls } from './WalkControls.js';
+import { CharacterMode } from './character/CharacterMode.js';
+import { DoorAnimator } from './doors.js';
 import { buildScene, disposeTree } from './SceneBuilder.js';
 import { highlighted } from './materials.js';
 import { levelElevation, getEntity, SITE_LEVEL } from '../model/project.js';
@@ -54,9 +55,8 @@ export class View3D {
     this.controls.maxDistance = 400;
     this.controls.screenSpacePanning = true;
 
-    this.walk = new WalkControls(this.camera, renderer.domElement, container.parentElement);
-    this.walk.onExit = () => this._exitWalk();
-    this.walking = false;
+    this.doors = new DoorAnimator();
+    this.character = new CharacterMode(this);
 
     this.root = null;
     this.refMeshes = new Map();
@@ -68,7 +68,7 @@ export class View3D {
     // во время перетаскивания пересобираем реже — план остаётся отзывчивым
     bus.on('project:changed', ({ reason }) => this.invalidate(reason === 'gesture' ? 160 : 30));
     bus.on('level:changed', () => {
-      if (app.state.settings.cutaway) this.invalidate();
+      if (app.state.settings.cutaway || this.character.cutaway) this.invalidate();
     });
     bus.on('settings:changed', ({ key }) => {
       if (['cutaway', 'roofs3d', 'edges', 'furniture3d'].includes(key)) this.invalidate();
@@ -96,7 +96,11 @@ export class View3D {
       }
       this._last = performance.now();
       requestAnimationFrame(this._loop);
-    } else if (this.walking) this.walk.stop();
+    } else if (this.walking) this.character.stop();
+  }
+
+  get walking() {
+    return this.character.active;
   }
 
   invalidate(delay = 30) {
@@ -117,7 +121,7 @@ export class View3D {
     const s = state.settings;
     this.root = buildScene(project, {
       activeLevelId: state.activeLevelId,
-      cutaway: s.cutaway,
+      cutaway: s.cutaway || this.character.cutaway,
       roofs: s.roofs3d,
       furniture: s.furniture3d,
       edges: s.edges,
@@ -135,6 +139,8 @@ export class View3D {
     });
     this._fitShadow();
     this._applyHighlight();
+    this.doors.attach(this.root);
+    this.character.onProjectChanged();
     // первый дом в пустом проекте — показать его крупно
     const hasWalls = project.walls.length > 0;
     if (hasWalls && this._hadWalls === false) this.frame();
@@ -160,6 +166,7 @@ export class View3D {
   }
 
   _applyHighlight() {
+    this.character.cam?.resetFade();
     for (const m of this.highlightedMeshes) m.material = m.userData.baseMaterial;
     this.highlightedMeshes = [];
     for (const ref of this.app.state.selection) {
@@ -217,7 +224,8 @@ export class View3D {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this._last) / 1000);
     this._last = now;
-    if (this.walking) this.walk.update(dt);
+    this.doors.update(dt);
+    if (this.walking) this.character.update(dt);
     else this.controls.update();
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);
@@ -225,33 +233,39 @@ export class View3D {
 
   // ── Прогулка ───────────────────────────────────────────────────────────
 
-  startWalk() {
-    const { project, state } = this.app;
-    const eye = levelElevation(project, state.activeLevelId) + 1.65;
-    const t = this.controls.target;
+  /** Начать прогулку манекеном; at — точка плана на активном этаже. */
+  startWalk({ at = null } = {}) {
+    if (this.walking) return this.character.teleport(at);
     this.controls.enabled = false;
-    this.walking = true;
-    this.walk.start({ position: new THREE.Vector3(t.x, eye, t.z), touch: state.coarse });
+    this.character.start({ at });
     this.app.bus.emit('walk:changed', { walking: true });
   }
 
-  _exitWalk() {
-    if (!this.walking) return;
-    this.walking = false;
+  stopWalk() {
+    this.character.stop();
+  }
+
+  /** Манекен ушёл: орбитальная камера смотрит туда, где он стоял. */
+  onWalkEnd() {
     this.controls.enabled = true;
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
-    this.controls.target.copy(this.camera.position).addScaledVector(dir, 4);
+    const c = this.character.ctrl;
+    if (c) this.controls.target.set(c.pos.x, c.pos.y + 1, c.pos.z);
+    if (this.camera.position.distanceTo(this.controls.target) < 2) {
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      this.camera.position.copy(this.controls.target).addScaledVector(dir, -4);
+    }
     this.controls.update();
+    this.invalidate(0);
     this.app.bus.emit('walk:changed', { walking: false });
   }
 
   keyDown(ev) {
-    return this.walk.keyDown(ev);
+    return this.character.keyDown(ev);
   }
 
   keyUp(ev) {
-    this.walk.keyUp(ev);
+    this.character.keyUp(ev);
   }
 
   // ── Выбор кликом ───────────────────────────────────────────────────────
@@ -272,19 +286,26 @@ export class View3D {
     });
   }
 
-  _pick(ev) {
-    if (!this.root) return;
+  /** Объект проекта под курсором (без манекена). */
+  pickRef(ev) {
+    if (!this.root) return null;
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
-    const hits = ray.intersectObject(this.root, true);
-    const { state, project } = this.app;
-    for (const h of hits) {
+    for (const h of ray.intersectObject(this.root, true)) {
       let o = h.object;
       while (o && !o.userData.ref) o = o.parent;
-      if (!o) continue;
-      const ref = o.userData.ref;
+      if (o) return o.userData.ref;
+    }
+    return null;
+  }
+
+  _pick(ev) {
+    if (!this.root) return;
+    const { state, project } = this.app;
+    const ref = this.pickRef(ev);
+    if (ref) {
       if (ref.kind === 'site') {
         state.clearSelection();
         return;
@@ -293,7 +314,8 @@ export class View3D {
       let levelId = e?.levelId;
       if (ref.kind === 'opening') levelId = getEntity(project, 'wall', e?.wallId)?.levelId;
       if (ref.kind === 'zone' || levelId === SITE_LEVEL) levelId = project.levels[0].id;
-      if (levelId && levelId !== state.activeLevelId) state.setLevel(levelId);
+      // во время прогулки этаж задаёт манекен — не переключаем
+      if (levelId && levelId !== state.activeLevelId && !this.walking) state.setLevel(levelId);
       state.select(ref, ev.shiftKey);
       return;
     }

@@ -3,6 +3,7 @@
  * Геометрия рисуется в мировых координатах (метры) через ctx.setTransform,
  * подписи — в экранных, чтобы текст не масштабировался.
  */
+import { drawCharacter } from './drawCharacter.js';
 import { THEME, font } from './theme.js';
 import { drawGrid } from './drawGrid.js';
 import { drawSite, drawSiteItems } from './drawSite.js';
@@ -76,6 +77,7 @@ export class Renderer2D {
     if (this.settings.roofs2d) drawRoofs(ctx, this);
     drawRoomLabels(ctx, this);
     if (this.settings.dims) drawDimensions(ctx, this);
+    if (!exportMode) drawCharacter(ctx, this, this.editor.character);
     if (overlay) {
       drawSelection(ctx, this);
       this.editor.tool?.drawOverlay?.(ctx, this);

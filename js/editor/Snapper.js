@@ -1,19 +1,35 @@
 /**
  * Привязки курсора. Приоритет:
  *  1. концы стен и другие опорные точки (примыкание стен);
- *  2. ось существующей стены (Т-примыкание);
+ *  2. ось существующей стены (Т-примыкание), а на ней — середина стены
+ *     и середины участков между примыканиями («умное центрирование»);
  *  3. фиксированный угол от предыдущей точки (0/45/90°, Shift — принудительно);
- *  4. направляющие по X/Y от опорных точек (выравнивание);
+ *  4. направляющие по X/Y от опорных точек, центров комнат и середин стен;
  *  5. сетка.
  * Alt временно отключает привязки.
  */
 import { DEG, sub, add, mul, dot, len, dist, projectOnSegment, lineIntersect, snapValue } from '../core/geometry.js';
-import { DEFAULTS } from '../model/defaults.js';
 import { SITE_LEVEL } from '../model/project.js';
+import { wallMidpoints, clearCenterAt, roomAt } from './smartSnap.js';
 
 export class Snapper {
   constructor(editor) {
     this.editor = editor;
+    this._mids = new WeakMap();
+  }
+
+  /** Середины стен этажа (кэш на геометрию этажа). */
+  midpoints(levelId) {
+    const geoms = this.editor.geomsFor(levelId);
+    if (!this._mids.has(geoms)) {
+      const byWall = new Map();
+      for (const m of wallMidpoints(geoms)) {
+        if (!byWall.has(m.g.wall.id)) byWall.set(m.g.wall.id, []);
+        byWall.get(m.g.wall.id).push(m);
+      }
+      this._mids.set(geoms, byWall);
+    }
+    return this._mids.get(geoms);
   }
 
   /**
@@ -90,7 +106,8 @@ export class Snapper {
       return res;
     }
 
-    // 2. Ось стены
+    // 2. Ось стены (и её середины)
+    const mids = walls.length ? this.midpoints(levelId) : new Map();
     let wallHit = null;
     let wallD = R;
     for (const w of walls) {
@@ -106,19 +123,35 @@ export class Snapper {
         if (dist(p, raw) > R * 1.6) continue;
       } else {
         const L = Math.hypot(b.x - a.x, b.y - a.y);
-        const along = Math.max(0, Math.min(L, snapValue(pr.along, grid)));
+        let along = Math.max(0, Math.min(L, snapValue(pr.along, grid)));
+        // середина стены или участка между примыканиями
+        let mid = null;
+        for (const m of mids.get(w.id) || []) {
+          const dm = Math.abs(m.s - pr.along);
+          if (dm < Math.max(R, 0.12) && (!mid || dm < mid.d)) mid = { d: dm, m };
+        }
+        if (mid) along = mid.m.s;
         p = L > 0 ? add(a, mul(sub(b, a), along / L)) : a;
+        if (mid) {
+          const dd = dist(p, raw);
+          if (dd < wallD + R * 0.5) {
+            wallHit = { p, wall: w, mid: mid.m };
+            wallD = dd;
+          }
+          continue;
+        }
       }
       const d = dist(p, raw);
-      if (d < wallD + R * 0.5) {
+      if (d < wallD + R * 0.5 && !(wallHit?.mid && d > wallD - R * 0.2)) {
         wallHit = { p, wall: w };
         wallD = d;
       }
     }
     if (wallHit) {
       res.point = wallHit.p;
-      res.type = 'wall';
+      res.type = wallHit.mid ? 'mid' : 'wall';
       res.target = wallHit.wall;
+      if (wallHit.mid) res.label = wallHit.mid.whole ? 'середина стены' : 'середина';
       return res;
     }
 
@@ -126,14 +159,26 @@ export class Snapper {
     let p = { x: raw.x, y: raw.y };
     if (ray) p = add(from, mul(ray.d, snapValue(dot(sub(raw, from), ray.d), grid)));
 
-    const guideAnchors = from ? [...anchors, { ...from, src: 'from' }] : anchors;
+    const guideAnchors = from ? [...anchors, { ...from, src: 'from' }] : [...anchors];
+    if (opts.smartGuides !== false && walls.length) {
+      for (const list of mids.values()) for (const m of list) if (!exclude.has(m.g.wall.id)) guideAnchors.push({ ...m.p, src: 'mid', label: 'середина стены' });
+      const room = roomAt(project, levelId, raw);
+      if (room) {
+        const cc = clearCenterAt(this.editor.geomsFor(levelId), raw);
+        // линии через центр комнаты — от грани стены до курсора
+        if (cc.x) guideAnchors.push({ x: cc.x.v, y: cc.y ? cc.y.a.y : raw.y, src: 'center', label: 'центр комнаты', onlyX: true });
+        if (cc.y) guideAnchors.push({ x: cc.x ? cc.x.a.x : raw.x, y: cc.y.v, src: 'center', label: 'центр комнаты', onlyY: true });
+      }
+    }
     let gx = null;
     let gy = null;
+    // при равном расстоянии важнее центр комнаты, затем середина стены, затем просто точка
+    const rank = (a) => (a.src === 'center' ? 2 : a.label ? 1 : 0);
     for (const a of guideAnchors) {
       const dx = Math.abs(a.x - p.x);
       const dy = Math.abs(a.y - p.y);
-      if (dx < R && (!gx || dx < gx.d) && dist(a, p) > R) gx = { a, d: dx };
-      if (dy < R && (!gy || dy < gy.d) && dist(a, p) > R) gy = { a, d: dy };
+      if (dx < R && !a.onlyY && (!gx || dx < gx.d - 1e-6 || (dx <= gx.d + 1e-6 && rank(a) > rank(gx.a))) && dist(a, p) > R) gx = { a, d: dx };
+      if (dy < R && !a.onlyX && (!gy || dy < gy.d - 1e-6 || (dy <= gy.d + 1e-6 && rank(a) > rank(gy.a))) && dist(a, p) > R) gy = { a, d: dy };
     }
     if (ray) {
       const horizontal = Math.abs(ray.d.y) < 1e-6;
@@ -154,8 +199,10 @@ export class Snapper {
         y: gy ? gy.a.y : snapValue(p.y, grid),
       };
     }
-    if (gx) res.guides.push({ a: { x: gx.a.x, y: gx.a.y }, b: p });
-    if (gy) res.guides.push({ a: { x: gy.a.x, y: gy.a.y }, b: p });
+    if (gx) res.guides.push({ a: { x: gx.a.x, y: gx.a.y }, b: p, label: gx.a.label });
+    if (gy) res.guides.push({ a: { x: gy.a.x, y: gy.a.y }, b: p, label: gy.a.label });
+    const lab = res.guides.find((g) => g.label);
+    if (lab) res.label = lab.label;
     res.point = p;
     res.type = res.guides.length ? 'guide' : ray ? 'angle' : 'grid';
     return res;
@@ -181,6 +228,18 @@ export function drawSnapIndicator(ctx, r, snap, THEME) {
   if (snap.type === 'endpoint') {
     r.dot(ctx, p, 7, 'rgba(14, 159, 110, 0.18)', THEME.snap, 2);
     r.dot(ctx, p, 2.5, THEME.snap, null);
+  } else if (snap.type === 'mid') {
+    const s = r.px(7);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = THEME.snap;
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(s, s * 0.8);
+    ctx.lineTo(-s, s * 0.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   } else if (snap.type === 'wall') {
     const s = r.px(10);
     ctx.save();
@@ -192,5 +251,8 @@ export function drawSnapIndicator(ctx, r, snap, THEME) {
     ctx.restore();
   } else {
     r.dot(ctx, p, 3, THEME.accent, THEME.handleFill, 1.2);
+  }
+  if (snap.label) {
+    r.label(ctx, { x: p.x, y: p.y - r.px(20) }, snap.label, { size: 11, weight: 600, color: '#fff', bg: THEME.snap, halo: false });
   }
 }
