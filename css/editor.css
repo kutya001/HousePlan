@@ -27,7 +27,7 @@
   padding: 6px 6px 6px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(251, 252, 252, 0.96);
+  background: var(--surface-float);
   box-shadow: var(--shadow-float);
   backdrop-filter: blur(6px);
   z-index: 10;
@@ -55,7 +55,7 @@
   color: var(--accent-ink);
 }
 .opt-close:hover {
-  background: #d7e2fa;
+  background: var(--accent-soft-2);
   color: var(--accent-ink);
 }
 
@@ -70,7 +70,7 @@
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(251, 252, 252, 0.94);
+  background: var(--surface-float);
   box-shadow: var(--shadow-float);
   z-index: 10;
 }
@@ -100,7 +100,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(237, 241, 243, 0.55);
+  background: color-mix(in srgb, var(--paper) 55%, transparent);
   z-index: 12;
 }
 .empty-card {
@@ -180,9 +180,9 @@
   display: flex;
   gap: 2px;
   padding: 3px;
-  border: 1px solid rgba(196, 205, 211, 0.9);
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: rgba(251, 252, 252, 0.92);
+  background: var(--surface-float);
   box-shadow: var(--shadow-float);
   backdrop-filter: blur(6px);
   pointer-events: auto;

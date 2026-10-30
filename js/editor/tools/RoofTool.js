@@ -26,7 +26,12 @@ export class RoofTool extends Tool {
     ];
   }
 
+  get shortHint() {
+    return 'Протяните прямоугольник над домом или нажмите «По контуру этажа»';
+  }
+
   cancel() {
+    this.secondTouch = false;
     this.start = null;
     this.end = null;
     this.render();
@@ -64,6 +69,11 @@ export class RoofTool extends Tool {
       this.start = p;
       this.end = p;
       this.dragging = true;
+    } else if (e.touch) {
+      // второе касание: можно поводить пальцем, угол зафиксируется при отпускании
+      this.end = p;
+      this.secondTouch = true;
+      this.render();
     } else {
       this.end = p;
       this._commit();
@@ -71,6 +81,12 @@ export class RoofTool extends Tool {
   }
 
   pointerUp(e) {
+    if (this.secondTouch) {
+      this.secondTouch = false;
+      this.end = this._snap(e).point;
+      this._commit();
+      return;
+    }
     if (!this.dragging) return;
     this.dragging = false;
     const p = this._snap(e).point;

@@ -1,0 +1,19 @@
+{
+  "name": "HousePlan — планировщик дома",
+  "short_name": "HousePlan",
+  "description": "Планировка дома и участка: стены, окна, двери, этажи, лестницы, крыши и мебель. План и 3D.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fbfcfc",
+  "theme_color": "#fbfcfc",
+  "categories": ["productivity", "utilities", "design"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

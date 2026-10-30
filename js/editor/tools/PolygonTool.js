@@ -21,6 +21,35 @@ export class PolygonTool extends Tool {
   cancel() {
     this.points = [];
     this.dragStart = null;
+    this.touchDown = false;
+    this.refreshOptions();
+    this.render();
+  }
+
+  pointerCancel() {
+    this.touchDown = false;
+    this.dragStart = null;
+    this.cursorPt = null;
+    this.render();
+  }
+
+  get shortHint() {
+    return this.points.length
+      ? 'Ставьте точки, отпуская палец. Коснитесь первой точки или нажмите «Замкнуть».'
+      : 'Коснитесь первой точки или протяните прямоугольник';
+  }
+
+  actions() {
+    if (!this.points.length) return [];
+    return [
+      { label: 'Убрать точку', icon: 'undo', onClick: () => this._popPoint() },
+      { label: 'Замкнуть', icon: 'check', primary: true, disabled: this.points.length < 3, onClick: () => this._complete() },
+    ];
+  }
+
+  _popPoint() {
+    this.points.pop();
+    this.refreshOptions();
     this.render();
   }
 
@@ -35,6 +64,7 @@ export class PolygonTool extends Tool {
   }
 
   pointerMove(e) {
+    if (e.touch && !this.touchDown) return;
     this.snap = this._snap(e);
     this.cursorPt = this.snap.point;
     this.render();
@@ -42,34 +72,63 @@ export class PolygonTool extends Tool {
 
   pointerDown(e) {
     const p = this._snap(e).point;
-    if (!this.points.length) {
-      this.dragStart = p;
-      this.points = [p];
+    this.cursorPt = p;
+    if (e.touch) {
+      // палец: точка ставится при отпускании, первое касание можно протянуть в прямоугольник
+      this.touchDown = true;
+      if (!this.points.length) this.dragStart = p;
       this.render();
       return;
     }
-    if (this.points.length >= 3 && dist(p, this.points[0]) < this.px(10)) {
+    if (!this.points.length) {
+      this.dragStart = p;
+      this.points = [p];
+      this.refreshOptions();
+      this.render();
+      return;
+    }
+    this._addPoint(p, 10);
+  }
+
+  _addPoint(p, closePx) {
+    if (this.points.length >= 3 && dist(p, this.points[0]) < this.px(closePx)) {
       this._complete();
       return;
     }
-    if (dist(p, this.points[this.points.length - 1]) > 0.02) this.points.push(p);
+    if (!this.points.length || dist(p, this.points[this.points.length - 1]) > 0.02) this.points.push(p);
+    if (this.points.length === 1) this.app.bus.emit('hint:show', { text: this.shortHint, touchOnly: true });
+    this.refreshOptions();
     this.render();
   }
 
   pointerUp(e) {
-    if (!this.dragStart) return;
     const p = this._snap(e).point;
+    if (e.touch) {
+      if (!this.touchDown) return;
+      this.touchDown = false;
+      const start = this.dragStart;
+      this.dragStart = null;
+      if (!this.points.length && start && Math.abs(p.x - start.x) > 0.3 && Math.abs(p.y - start.y) > 0.3) {
+        this._rect(start, p);
+        return;
+      }
+      this._addPoint(p, 18);
+      return;
+    }
+    if (!this.dragStart) return;
     const start = this.dragStart;
     this.dragStart = null;
-    if (this.points.length === 1 && Math.abs(p.x - start.x) > 0.3 && Math.abs(p.y - start.y) > 0.3) {
-      this.points = [
-        { x: start.x, y: start.y },
-        { x: p.x, y: start.y },
-        { x: p.x, y: p.y },
-        { x: start.x, y: p.y },
-      ];
-      this._complete();
-    }
+    if (this.points.length === 1 && Math.abs(p.x - start.x) > 0.3 && Math.abs(p.y - start.y) > 0.3) this._rect(start, p);
+  }
+
+  _rect(a, b) {
+    this.points = [
+      { x: a.x, y: a.y },
+      { x: b.x, y: a.y },
+      { x: b.x, y: b.y },
+      { x: a.x, y: b.y },
+    ];
+    this._complete();
   }
 
   doubleClick() {
@@ -85,8 +144,7 @@ export class PolygonTool extends Tool {
   keyDown(ev) {
     if (!this.points.length) return false;
     if (ev.key === 'Backspace') {
-      this.points.pop();
-      this.render();
+      this._popPoint();
       return true;
     }
     if (ev.key === 'Enter') {
@@ -105,6 +163,7 @@ export class PolygonTool extends Tool {
     this.points = [];
     this.dragStart = null;
     if (pts.length >= 3 && polygonArea(pts) > 0.05) this.complete(pts);
+    this.refreshOptions();
     this.render();
   }
 
@@ -112,6 +171,18 @@ export class PolygonTool extends Tool {
   complete() {}
 
   drawOverlay(ctx, r) {
+    if (this.dragStart && !this.points.length && this.cursorPt) {
+      const a = this.dragStart;
+      const b = this.cursorPt;
+      ctx.save();
+      ctx.fillStyle = this.fill;
+      ctx.strokeStyle = THEME.accent;
+      ctx.lineWidth = r.px(1.5);
+      ctx.setLineDash([r.px(6), r.px(4)]);
+      ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.restore();
+    }
     const pts = [...this.points];
     if (this.cursorPt && pts.length) pts.push(this.cursorPt);
     if (pts.length >= 2) {
@@ -129,7 +200,7 @@ export class PolygonTool extends Tool {
         const a = polygonArea(pts);
         r.label(ctx, this.cursorPt || pts[pts.length - 1], fmtArea(a), {
           size: 11,
-          color: '#fff',
+          color: THEME.labelInk,
           bg: THEME.accent,
           halo: false,
           align: 'left',
@@ -137,7 +208,7 @@ export class PolygonTool extends Tool {
         });
       }
     }
-    this.points.forEach((p, i) => r.dot(ctx, p, i === 0 && this.points.length >= 3 ? 6 : 3.5, '#fff', THEME.accent, 1.5));
+    this.points.forEach((p, i) => r.dot(ctx, p, i === 0 && this.points.length >= 3 ? 6 : 3.5, THEME.handleFill, THEME.accent, 1.5));
     if (this.snap) drawSnapIndicator(ctx, r, this.snap, THEME);
   }
 }

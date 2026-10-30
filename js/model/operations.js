@@ -333,6 +333,34 @@ export function duplicateEntities(project, entities, offset, targetLevelId) {
 }
 
 /**
+ * Разделить стену в точке на две (проёмы переходят в ту часть, где их центр).
+ * @returns {[string, string] | null} id новых стен
+ */
+export function splitWall(project, wallId, point) {
+  const w = project.walls.find((x) => x.id === wallId);
+  if (!w) return null;
+  const a = { x: w.x1, y: w.y1 };
+  const b = { x: w.x2, y: w.y2 };
+  const pr = projectOnSegment(point, a, b);
+  const L = dist(a, b);
+  if (pr.along < 0.1 || pr.along > L - 0.1) return null;
+  const p = pr.point;
+  const first = { ...w, id: uid('wall'), x2: p.x, y2: p.y };
+  const second = { ...w, id: uid('wall'), x1: p.x, y1: p.y };
+  const idx = project.walls.indexOf(w);
+  project.walls.splice(idx, 1, first, second);
+  for (const o of project.openings) {
+    if (o.wallId !== w.id) continue;
+    if (o.t <= pr.along) o.wallId = first.id;
+    else {
+      o.wallId = second.id;
+      o.t -= pr.along;
+    }
+  }
+  return [first.id, second.id];
+}
+
+/**
  * Если новая стена разрезала комнату на части, комната делится:
  * часть с исходной подписью сохраняет название, остальные становятся новыми комнатами
  * с тем же покрытием пола. Комнаты, нарисованные вручную вне стен, не трогаются.

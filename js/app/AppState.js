@@ -3,11 +3,13 @@
  * активный этаж, выделение, инструмент, режим вида, настройки отображения.
  */
 import { getEntity, getLevel } from '../model/project.js';
+import { currentLayout, isCoarse, watchLayout } from './responsive.js';
 
 const SETTINGS_KEY = 'houseplan.settings.v1';
 
 const DEFAULT_SETTINGS = {
   snap: true, // привязки
+  gridStep: 0.05, // шаг привязки к сетке, м
   dims: true, // размеры на плане
   lowerLevel: true, // показывать этаж ниже полупрозрачным
   roofs2d: true, // контуры крыш на плане
@@ -16,6 +18,7 @@ const DEFAULT_SETTINGS = {
   edges: true, // контуры граней в 3D
   shadows: true,
   furniture3d: true,
+  theme: 'system', // light | dark | system
 };
 
 export class AppState {
@@ -27,8 +30,26 @@ export class AppState {
     this.hover = null;
     this.toolId = 'select';
     this.viewMode = 'plan';
-    this.settings = { ...DEFAULT_SETTINGS, ...loadSettings() };
+    this.layout = currentLayout();
+    this.coarse = isCoarse();
+    // на телефонах тени по умолчанию выключены — бережём батарею
+    this.settings = { ...DEFAULT_SETTINGS, shadows: !this.coarse, ...loadSettings() };
     bus.on('project:changed', () => this._validate());
+    watchLayout((layout, coarse) => {
+      const changed = layout !== this.layout || coarse !== this.coarse;
+      this.layout = layout;
+      this.coarse = coarse;
+      if (changed) bus.emit('layout:changed', { layout, coarse });
+    });
+  }
+
+  get isPhone() {
+    return this.layout === 'phone';
+  }
+
+  /** Панель свойств не помещается на экран (телефон, планшет). */
+  get compact() {
+    return this.layout !== 'desktop';
   }
 
   get project() {

@@ -41,8 +41,33 @@ export class MeasureTool extends Tool {
     this.render();
   }
 
+  pointerUp(e) {
+    if (!this.dragging) return;
+    this.dragging = false;
+    const p = this._snap(e).point;
+    if (dist(this.a, p) > this.px(12)) {
+      this.b = p;
+      this.done = true;
+      this.setHint(`Расстояние: ${fmtLen(dist(this.a, this.b))}. Кликните, чтобы начать новый замер.`);
+      this.app.bus.emit('hint:show', { text: `Расстояние: ${fmtLen(dist(this.a, this.b))}` });
+      this.render();
+    }
+  }
+
+  get shortHint() {
+    return 'Проведите пальцем от точки до точки';
+  }
+
   pointerDown(e) {
     const p = this._snap(e).point;
+    if (e.touch && (!this.a || this.done)) {
+      this.a = p;
+      this.b = p;
+      this.done = false;
+      this.dragging = true;
+      this.render();
+      return;
+    }
     if (!this.a || this.done) {
       this.a = p;
       this.b = p;
@@ -67,8 +92,8 @@ export class MeasureTool extends Tool {
     ctx.lineTo(this.b.x, this.b.y);
     ctx.stroke();
     ctx.restore();
-    r.dot(ctx, this.a, 4, THEME.guide, '#fff');
-    r.dot(ctx, this.b, 4, THEME.guide, '#fff');
+    r.dot(ctx, this.a, 4, THEME.guide, THEME.handleFill);
+    r.dot(ctx, this.b, 4, THEME.guide, THEME.handleFill);
     dimLine(ctx, r, this.a, this.b, n, 0, true, fmtLen(dist(this.a, this.b)));
   }
 }

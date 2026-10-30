@@ -21,9 +21,9 @@ export class PropertiesPanel {
       else this.refresh();
     });
     app.bus.on('properties:focus', () => {
-      this.app.ui.side.showTab('properties');
-      document.body.classList.add('side-open');
-      requestAnimationFrame(() => this.root.querySelector('input[type=text], input')?.focus());
+      this.app.ui.side.open('properties');
+      // на телефоне не вызываем клавиатуру сразу — она закроет полшторки
+      if (!this.app.state.coarse) requestAnimationFrame(() => this.root.querySelector('input[type=text], input')?.focus());
     });
     this.render();
   }
@@ -121,6 +121,7 @@ export class PropertiesPanel {
     const pf = renderForm(PROJECT_SCHEMA, () => app.project, () => app.project, (field, value) => {
       app.store.commit((p) => field.set(p, value, p));
     });
+    pf.el.classList.add('form-project');
     this.forms.push(lf, pf);
     this.root.append(
       h('div', { class: 'panel-head' }, h('h3', {}, getLevelT()?.name || 'Этаж')),

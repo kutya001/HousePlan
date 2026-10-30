@@ -66,13 +66,13 @@ export class PlaceTool extends Tool {
   _build(e) {
     const p = e.world;
     if (this.what === 'stair') {
-      const s = createStair(this.levelId, snapValue(p.x, DEFAULTS.grid), snapValue(p.y, DEFAULTS.grid), {
+      const s = createStair(this.levelId, snapValue(p.x, this.editor.gridStep), snapValue(p.y, this.editor.gridStep), {
         shape: this.settings.shape,
         rotation: this.settings.rotation,
       });
       return s;
     }
-    const it = createItem(this.levelId, this.settings.type, snapValue(p.x, DEFAULTS.grid), snapValue(p.y, DEFAULTS.grid), {
+    const it = createItem(this.levelId, this.settings.type, snapValue(p.x, this.editor.gridStep), snapValue(p.y, this.editor.gridStep), {
       rotation: this.settings.rotation,
     });
     if (catalogItem(it.type)?.wallSnap && !e.alt) {
@@ -87,13 +87,46 @@ export class PlaceTool extends Tool {
     return it;
   }
 
+  get shortHint() {
+    return this.what === 'stair' ? 'Коснитесь и отпустите там, где будет лестница' : 'Ведите пальцем по плану и отпустите — предмет встанет туда';
+  }
+
   pointerMove(e) {
+    if (e.touch && !this.touchDown) return;
     this.ghost = this._build(e);
     this.render();
   }
 
   pointerDown(e) {
+    if (e.touch) {
+      this.touchDown = true;
+      this.ghost = this._build(e);
+      this.render();
+      return;
+    }
     this.placeAt(e);
+  }
+
+  pointerUp(e) {
+    if (!this.touchDown) return;
+    this.touchDown = false;
+    this.placeAt(e);
+  }
+
+  pointerCancel() {
+    this.touchDown = false;
+    this.ghost = null;
+    this.render();
+  }
+
+  actions() {
+    return [{ label: 'Повернуть', icon: 'rotate', onClick: () => this.rotate(90) }];
+  }
+
+  rotate(deg) {
+    this.settings.rotation = normalizeDeg((this.settings.rotation || 0) + deg);
+    if (this.ghost && this.editor.lastPointer) this.ghost = this._build(this.editor.lastPointer);
+    this.render();
   }
 
   placeAt(e) {

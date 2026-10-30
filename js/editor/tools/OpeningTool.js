@@ -83,8 +83,33 @@ export class OpeningTool extends Tool {
     this.render();
   }
 
+  get shortHint() {
+    return 'Ведите пальцем по стене и отпустите там, где нужен проём';
+  }
+
   pointerDown(e) {
     this.pointerMove(e);
+    if (e.touch) {
+      this.touchDown = true;
+      return;
+    }
+    this._place();
+  }
+
+  pointerUp(e) {
+    if (!this.touchDown) return;
+    this.touchDown = false;
+    this.pointerMove(e);
+    this._place();
+  }
+
+  pointerCancel() {
+    this.touchDown = false;
+    this.preview = null;
+    this.render();
+  }
+
+  _place() {
     const pv = this.preview;
     if (!pv) {
       this.toast('Наведите курсор на стену', 'warn');

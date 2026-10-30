@@ -13,6 +13,7 @@ import { createTools } from './tools/index.js';
 import { computeWallGeometry } from '../geometry/wallGeometry.js';
 import { bboxOf } from '../core/geometry.js';
 import { SITE_LEVEL } from '../model/project.js';
+import { haptic } from '../app/responsive.js';
 
 export class Editor2D {
   constructor(app, container) {
@@ -59,6 +60,11 @@ export class Editor2D {
     return this.app.state.activeLevelId;
   }
 
+  /** Шаг привязки к сетке из настроек, м. */
+  get gridStep() {
+    return this.app.state.settings.gridStep || 0.05;
+  }
+
   /** Геометрия стен этажа (кэш сбрасывается при любом изменении проекта). */
   geomsFor(levelId) {
     if (!this._geomCache.has(levelId)) {
@@ -85,8 +91,9 @@ export class Editor2D {
     this.app.bus.emit('hint:changed', { text: text || '' });
   }
 
-  hitTest(p, opts) {
-    return hitTest(this, p, opts);
+  /** Сначала точное попадание, затем — с допуском (палец «толще» курсора). */
+  hitTest(p, opts = {}) {
+    return hitTest(this, p, { ...opts, tolPx: 0 }) || hitTest(this, p, opts);
   }
 
   requestRender() {
@@ -148,10 +155,12 @@ export class Editor2D {
     return {
       screen,
       world: this.viewport.toWorld(screen),
+      client: { x: ev.clientX, y: ev.clientY },
       button: ev.button,
       shift: ev.shiftKey,
       alt: ev.altKey,
       ctrl: ev.ctrlKey || ev.metaKey,
+      touch: ev.pointerType === 'touch' || ev.pointerType === 'pen',
       original: ev,
     };
   }
@@ -162,13 +171,16 @@ export class Editor2D {
     c.addEventListener('pointermove', (ev) => this._onMove(ev));
     c.addEventListener('pointerup', (ev) => this._onUp(ev));
     c.addEventListener('pointercancel', (ev) => this._onUp(ev, true));
-    c.addEventListener('pointerleave', () => {
+    c.addEventListener('pointerleave', (ev) => {
+      if (ev.pointerType !== 'mouse') return;
       if (!this._pan && this.app.state.setHover(null)) this.requestRender();
       this.tool?.pointerLeave?.();
     });
     c.addEventListener('dblclick', (ev) => this.tool?.doubleClick?.(this._event(ev)));
     c.addEventListener('contextmenu', (ev) => ev.preventDefault());
     c.addEventListener('wheel', (ev) => this._onWheel(ev), { passive: false });
+    // Safari: свои жесты масштабирования страницы не нужны
+    for (const g of ['gesturestart', 'gesturechange']) c.addEventListener(g, (ev) => ev.preventDefault());
 
     // Перетаскивание из каталога
     c.addEventListener('dragover', (ev) => {
@@ -190,12 +202,14 @@ export class Editor2D {
     this.canvas.focus({ preventScroll: true });
     if (ev.pointerType === 'touch') {
       this._touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-      if (this._touches.size === 2) {
-        this.tool?.cancel?.();
-        this._startPinch();
+      if (this._touches.size >= 2) {
+        // второй палец — масштаб и сдвиг; начатое действие отменяем, но цепочку стен не теряем
+        this._clearLongPress();
+        if (!this._suppressTouch) this.tool?.pointerCancel?.();
+        this._suppressTouch = true;
+        if (this._touches.size === 2) this._startPinch();
         return;
       }
-      if (this._touches.size > 2) return;
     }
     const e = this._event(ev);
     this.lastPointer = e;
@@ -209,7 +223,31 @@ export class Editor2D {
     }
     if (ev.button !== 0) return;
     this.canvas.setPointerCapture(ev.pointerId);
+    if (e.touch) this._armLongPress(ev, e);
     this.tool?.pointerDown?.(e);
+  }
+
+  /** Долгое нажатие пальцем — контекстное меню (или действие инструмента). */
+  _armLongPress(ev, e) {
+    this._clearLongPress();
+    this._longPress = {
+      id: ev.pointerId,
+      x: ev.clientX,
+      y: ev.clientY,
+      timer: setTimeout(() => {
+        this._longPress = null;
+        this._longPressFired = true;
+        this.tool?.pointerCancel?.();
+        haptic(15);
+        this.tool?.longPress?.(e);
+        this.requestRender();
+      }, 480),
+    };
+  }
+
+  _clearLongPress() {
+    if (this._longPress) clearTimeout(this._longPress.timer);
+    this._longPress = null;
   }
 
   _onMove(ev) {
@@ -219,7 +257,9 @@ export class Editor2D {
         this._updatePinch();
         return;
       }
+      if (this._suppressTouch || this._longPressFired) return;
     }
+    if (this._longPress && Math.hypot(ev.clientX - this._longPress.x, ev.clientY - this._longPress.y) > 9) this._clearLongPress();
     const e = this._event(ev);
     this.lastPointer = e;
     this.app.bus.emit('cursor:moved', e.world);
@@ -240,10 +280,18 @@ export class Editor2D {
   }
 
   _onUp(ev, cancelled = false) {
+    this._clearLongPress();
     if (ev.pointerType === 'touch') {
       this._touches.delete(ev.pointerId);
-      if (this._pinch) {
-        if (this._touches.size < 2) this._pinch = null;
+      if (this._pinch && this._touches.size < 2) {
+        this._pinch = null;
+        this.app.bus.emit('zoom:changed', { scale: this.viewport.scale });
+      }
+      if (this._suppressTouch || this._longPressFired) {
+        if (this._touches.size === 0) {
+          this._suppressTouch = false;
+          this._longPressFired = false;
+        }
         return;
       }
     }
@@ -257,7 +305,7 @@ export class Editor2D {
     }
     if (this.canvas.hasPointerCapture?.(ev.pointerId)) this.canvas.releasePointerCapture(ev.pointerId);
     if (cancelled) {
-      this.tool?.cancel?.();
+      this.tool?.pointerCancel?.();
       return;
     }
     if (ev.button === 0) this.tool?.pointerUp?.(this._event(ev));
@@ -267,6 +315,12 @@ export class Editor2D {
     this._pan = { x: ev.clientX, y: ev.clientY, active: immediate, button: ev.button };
     this.canvas.setPointerCapture(ev.pointerId);
     if (immediate) this.canvas.style.cursor = 'grabbing';
+  }
+
+  /** Сдвиг плана из инструмента (палец по пустому месту). */
+  panBy(dxPx, dyPx) {
+    this.viewport.pan(dxPx, dyPx);
+    this.requestRender();
   }
 
   _startPinch() {

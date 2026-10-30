@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { WalkControls } from './WalkControls.js';
 import { buildScene, disposeTree } from './SceneBuilder.js';
 import { highlighted } from './materials.js';
 import { levelElevation, getEntity, SITE_LEVEL } from '../model/project.js';
@@ -18,7 +18,8 @@ export class View3D {
     this.framedOnce = false;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    // на телефонах ограничиваем плотность — плавнее и экономнее
+    renderer.setPixelRatio(Math.min(app.state.coarse ? 1.5 : 2, window.devicePixelRatio || 1));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'view3d-canvas';
@@ -53,9 +54,8 @@ export class View3D {
     this.controls.maxDistance = 400;
     this.controls.screenSpacePanning = true;
 
-    this.walk = new PointerLockControls(this.camera, renderer.domElement);
-    this.walk.addEventListener('unlock', () => this._exitWalk());
-    this.keys = new Set();
+    this.walk = new WalkControls(this.camera, renderer.domElement, container.parentElement);
+    this.walk.onExit = () => this._exitWalk();
     this.walking = false;
 
     this.root = null;
@@ -96,7 +96,7 @@ export class View3D {
       }
       this._last = performance.now();
       requestAnimationFrame(this._loop);
-    } else if (this.walking) this.walk.unlock();
+    } else if (this.walking) this.walk.stop();
   }
 
   invalidate(delay = 30) {
@@ -217,7 +217,7 @@ export class View3D {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this._last) / 1000);
     this._last = now;
-    if (this.walking) this._walkStep(dt);
+    if (this.walking) this.walk.update(dt);
     else this.controls.update();
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);
@@ -229,17 +229,16 @@ export class View3D {
     const { project, state } = this.app;
     const eye = levelElevation(project, state.activeLevelId) + 1.65;
     const t = this.controls.target;
-    this.camera.position.set(t.x, eye, t.z);
-    this._eye = eye;
-    this.walk.lock();
+    this.controls.enabled = false;
     this.walking = true;
+    this.walk.start({ position: new THREE.Vector3(t.x, eye, t.z), touch: state.coarse });
     this.app.bus.emit('walk:changed', { walking: true });
   }
 
   _exitWalk() {
     if (!this.walking) return;
     this.walking = false;
-    this.keys.clear();
+    this.controls.enabled = true;
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
     this.controls.target.copy(this.camera.position).addScaledVector(dir, 4);
@@ -247,23 +246,12 @@ export class View3D {
     this.app.bus.emit('walk:changed', { walking: false });
   }
 
-  _walkStep(dt) {
-    const speed = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 4.5 : 2.2) * dt;
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) this.walk.moveForward(speed);
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) this.walk.moveForward(-speed);
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) this.walk.moveRight(-speed);
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) this.walk.moveRight(speed);
-    this.camera.position.y = this._eye;
-  }
-
   keyDown(ev) {
-    if (!this.walking) return false;
-    this.keys.add(ev.code);
-    return true;
+    return this.walk.keyDown(ev);
   }
 
   keyUp(ev) {
-    this.keys.delete(ev.code);
+    this.walk.keyUp(ev);
   }
 
   // ── Выбор кликом ───────────────────────────────────────────────────────

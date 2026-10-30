@@ -207,7 +207,7 @@ textarea {
 }
 
 .pane-3d {
-  background: #dde7ee;
+  background: var(--view3d-bg);
 }
 
 /* ── Правая панель ──────────────────────────────────────────────────── */
@@ -295,10 +295,11 @@ textarea {
     display: none;
   }
   .rail-btn {
-    height: 40px;
+    height: 42px;
   }
 }
 
+/* ── Планшет: панель свойств выезжает справа ───────────────────────── */
 @media (max-width: 1180px) {
   .app {
     grid-template-columns: var(--rail-w) minmax(0, 1fr);
@@ -313,13 +314,26 @@ textarea {
     right: 0;
     bottom: var(--status-h);
     width: min(var(--side-w), 92vw);
-    transform: translateX(100%);
-    transition: transform 0.2s ease;
+    transform: translateX(calc(100% + 24px));
+    transition: transform 0.24s var(--ease-out);
     box-shadow: var(--shadow-float);
-    z-index: 30;
+    z-index: 40;
   }
   body.side-open .side {
     transform: none;
+  }
+  .side-backdrop {
+    position: fixed;
+    inset: var(--top-h) 0 var(--status-h) 0;
+    background: var(--overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 39;
+  }
+  body.side-open .side-backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
   .side-toggle {
     display: inline-flex;
@@ -329,15 +343,7 @@ textarea {
   }
 }
 
-@media (max-width: 860px) {
-  .brand-name,
-  .seg-label,
-  .topbar-actions .btn span:not(.icon) {
-    display: none;
-  }
-  .topbar {
-    gap: 8px;
-  }
+@media (min-width: 761px) and (max-width: 960px) {
   .stage[data-view='split'] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
@@ -346,42 +352,39 @@ textarea {
     border-left: 0;
     border-top: 1px solid var(--line-strong);
   }
+  .brand-name,
+  .seg-label,
+  .topbar-actions .btn span:not(.icon),
   .toggle span:not(.icon) {
     display: none;
   }
 }
 
-@media (max-width: 560px) {
-  :root {
-    --rail-w: 52px;
-  }
-  .brand,
-  .topbar-history .icon-btn:last-child {
-    display: none;
-  }
-  .topbar {
-    padding: 0 8px;
-    gap: 6px;
-  }
-  .view-switch .seg-btn {
-    padding: 0 8px;
-  }
-  .topbar-actions {
-    gap: 2px;
-  }
-  .topbar-actions .btn {
-    padding: 0 8px;
-  }
-  .rail-label {
-    display: none;
-  }
-  .rail-btn {
-    height: 40px;
-  }
+@media (max-width: 1180px) {
+  /* название проекта на узкой шапке не помещается — оно есть в свойствах проекта */
   .topbar-project {
     display: none;
   }
-  .status-hint {
+}
+
+/* Телефон в горизонтальной ориентации и низкие окна: экономим высоту */
+@media (max-height: 520px) and (min-width: 761px) {
+  :root {
+    --status-h: 0px;
+    --top-h: 46px;
+  }
+  .statusbar {
     display: none;
+  }
+  .rail {
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .rail-btn {
+    height: 40px;
+    flex: none;
+  }
+  .rail-group {
+    padding: 3px 0;
   }
 }

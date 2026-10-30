@@ -1,0 +1,851 @@
+/*
+ * Новые элементы интерфейса и раскладка для телефона.
+ * Сначала — общие стили (ПК), ниже — @media (max-width: 760px).
+ */
+
+.skip-link {
+  position: fixed;
+  left: 8px;
+  top: -60px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  z-index: 300;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+/* ── Общие: скрытые на ПК элементы ──────────────────────────────────── */
+.bottombar,
+.sheet-handle,
+.sheet-close,
+.side-tab[data-tab='levels'],
+.only-phone {
+  display: none;
+}
+.level-chip {
+  display: none;
+}
+@media (max-width: 1180px) {
+  .level-chip {
+    display: inline-flex;
+  }
+}
+
+/* Выбор этажа в шапке */
+.level-chip {
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 17px;
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.level-chip:hover {
+  background: var(--surface-2);
+}
+
+/* ── Панель действий с выделенным (планшет, телефон) ─────────────────── */
+.selection-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 24px);
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-float);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 14;
+  animation: rise 0.18s var(--ease-out);
+}
+.selection-bar::-webkit-scrollbar {
+  display: none;
+}
+.sel-name {
+  padding: 0 10px 0 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 34vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sel-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 56px;
+  height: 48px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sel-btn:hover,
+.sel-btn:active {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.sel-btn.danger {
+  color: var(--danger);
+}
+.sel-btn.primary {
+  color: var(--accent-ink);
+}
+
+/* ── Подсказка-«пилюля» (телефон) ────────────────────────────────────── */
+.hint-pill {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  transform: translateX(-50%);
+  max-width: min(92%, 480px);
+  padding: 9px 14px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--fs);
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: var(--shadow-float);
+  z-index: 16;
+  animation: rise 0.2s var(--ease-out);
+  cursor: pointer;
+}
+
+/* ── Контекстное меню ───────────────────────────────────────────────── */
+.ctx-menu {
+  position: fixed;
+  min-width: 220px;
+  max-width: 300px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  z-index: 150;
+  animation: fade 0.12s ease;
+}
+.ctx-title {
+  padding: 6px 10px 4px;
+  color: var(--ink-3);
+  font-size: var(--fs-s);
+  font-weight: 500;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover,
+.ctx-item:focus-visible {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.ctx-item .icon {
+  color: var(--ink-3);
+}
+.ctx-item.danger,
+.ctx-item.danger .icon {
+  color: var(--danger);
+}
+.ctx-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ctx-item kbd {
+  margin-left: auto;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+}
+
+/* Лоток инструментов (телефон) */
+.tool-tray {
+  position: fixed;
+  left: calc(8px + var(--safe-left));
+  right: calc(8px + var(--safe-right));
+  bottom: calc(var(--bottom-h) + var(--safe-bottom) + 8px);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  z-index: 60;
+  animation: rise 0.18s var(--ease-out);
+}
+.tray-title {
+  margin: 0 4px 8px;
+  font-size: var(--fs-s);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.tray-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tray-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 76px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-weight: 500;
+  font-size: var(--fs-s);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tray-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.tray-desc {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ink-3);
+  line-height: 1.2;
+}
+.tray-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+}
+
+/* Действия инструмента и поле длины */
+.opt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.opt-length {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.opt-length input {
+  width: 76px;
+  height: 30px;
+}
+
+/* Палитра команд */
+.palette {
+  width: min(620px, 100%);
+}
+.palette-input {
+  height: 44px;
+  font-size: var(--fs-l);
+  padding: 0 14px;
+}
+.palette-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: min(56vh, 460px);
+  overflow-y: auto;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.palette-item .icon {
+  color: var(--ink-3);
+}
+.palette-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.palette-item.active .icon {
+  color: var(--accent-ink);
+}
+.palette-group {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.palette-empty {
+  padding: 18px 10px;
+  color: var(--ink-3);
+}
+
+/* Настройки */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.settings section h3 {
+  margin: 0 0 10px;
+  font-size: var(--fs-m);
+  font-weight: 600;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+.settings-row label {
+  color: var(--ink-2);
+}
+input[type='checkbox'].switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 12px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background 0.15s;
+  margin: 0;
+}
+input[type='checkbox'].switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s var(--ease-out);
+}
+input[type='checkbox'].switch:checked {
+  background: var(--accent);
+}
+input[type='checkbox'].switch:checked::after {
+  transform: translateX(18px);
+}
+
+/* Джойстик прогулки (телефон) */
+.joystick {
+  position: absolute;
+  left: calc(24px + var(--safe-left));
+  bottom: calc(24px + var(--safe-bottom));
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(20, 28, 36, 0.28);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  touch-action: none;
+  z-index: 12;
+}
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.walk-exit {
+  position: absolute;
+  right: calc(12px + var(--safe-right));
+  top: 12px;
+  z-index: 12;
+}
+
+body.walking .view3d-bar {
+  display: none;
+}
+.walk-hint {
+  top: 64px;
+  bottom: auto;
+}
+
+/* Шапка шторки / вкладки */
+.sheet-head {
+  flex: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ТЕЛЕФОН
+   ══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  :root {
+    --top-h: 52px;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: calc(var(--top-h) + var(--safe-top)) minmax(0, 1fr) calc(var(--bottom-h) + var(--safe-bottom));
+    grid-template-areas:
+      'top'
+      'stage'
+      'bottom';
+  }
+  .rail,
+  .statusbar,
+  .zoom-ctrl .icon-btn:not(.zoom-fit),
+  .zoom-label,
+  .only-desktop {
+    display: none !important;
+  }
+  .only-phone {
+    display: revert;
+  }
+
+  /* Шапка */
+  .topbar {
+    padding: var(--safe-top) calc(8px + var(--safe-right)) 0 calc(8px + var(--safe-left));
+    gap: 4px;
+  }
+  .topbar .icon-btn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .topbar-history {
+    gap: 0;
+  }
+  .view-switch {
+    margin: 0;
+  }
+  .view-switch .seg-btn {
+    height: 36px;
+    padding: 0 12px;
+  }
+  .view-switch .seg-btn[data-mode='split'] {
+    display: none;
+  }
+  .topbar-spacer {
+    flex: 1;
+  }
+
+  /* Нижняя панель инструментов */
+  .bottombar {
+    grid-area: bottom;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    padding: 0 calc(4px + var(--safe-right)) var(--safe-bottom) calc(4px + var(--safe-left));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    z-index: 50;
+  }
+  .bb-btn {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .bb-btn .icon {
+    padding: 3px 14px;
+    border-radius: 14px;
+    transition: background 0.15s;
+  }
+  .bb-btn.active {
+    color: var(--accent-ink);
+  }
+  .bb-btn.active .icon {
+    background: var(--accent-soft);
+  }
+  .bb-btn.has-group::after {
+    content: '';
+    position: absolute;
+    top: 9px;
+    right: calc(50% - 22px);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid currentColor;
+    opacity: 0.55;
+  }
+  .bb-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Шторка вместо правой панели */
+  .side {
+    position: fixed;
+    left: var(--safe-left);
+    right: var(--safe-right);
+    top: auto;
+    bottom: calc(var(--bottom-h) + var(--safe-bottom));
+    width: auto;
+    height: var(--sheet-h, 52dvh);
+    max-height: calc(100dvh - var(--top-h) - var(--safe-top) - var(--bottom-h) - var(--safe-bottom) - 6px);
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-sheet);
+    transform: translateY(calc(100% + 24px));
+    transition: transform 0.28s var(--ease-out), height 0.24s var(--ease-out);
+    z-index: 45;
+  }
+  body.sheet-open .side {
+    transform: none;
+  }
+  body.sheet-full .side {
+    height: 100dvh;
+  }
+  .side.dragging {
+    transition: none;
+  }
+  .side-backdrop {
+    display: none;
+  }
+  .sheet-head {
+    order: -1;
+    position: relative;
+    padding-top: 14px;
+    touch-action: none;
+    cursor: grab;
+  }
+  .sheet-handle {
+    display: block;
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 3px;
+    background: var(--line-strong);
+  }
+  .sheet-close {
+    display: inline-flex;
+    position: absolute;
+    right: 8px;
+    top: 10px;
+  }
+  .side-tabs {
+    padding: 4px 56px 0 12px;
+  }
+  .side-tab {
+    min-height: var(--tap);
+    padding: 8px 12px 10px;
+    font-size: var(--fs-m);
+  }
+  .side-tab[data-tab='levels'] {
+    display: inline-block;
+  }
+  .side-levels {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    border-bottom: 0;
+  }
+  .side[data-tab='levels'] .side-levels {
+    display: block;
+  }
+  .side-body {
+    padding: 14px 16px calc(20px + var(--safe-bottom));
+  }
+
+  /* Крупнее элементы форм; 16px — без автозума iOS */
+  input[type='text'],
+  input[type='number'],
+  input[type='search'],
+  select {
+    height: 42px;
+    font-size: 16px;
+  }
+  .form {
+    gap: 12px;
+  }
+  .form-row {
+    grid-template-columns: 116px minmax(0, 1fr);
+  }
+  .btn {
+    height: 42px;
+  }
+  .btn-small {
+    height: 38px;
+    font-size: var(--fs);
+  }
+  .icon-btn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .level-pick {
+    min-height: var(--tap);
+  }
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px;
+  }
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+  .chip {
+    height: 34px;
+    padding: 0 14px;
+    flex: none;
+    font-size: var(--fs);
+  }
+  input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+  .form-check {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  /* Параметры инструмента — полоса с прокруткой */
+  .tool-options {
+    top: 8px;
+    left: calc(8px + var(--safe-left));
+    right: calc(8px + var(--safe-right));
+    width: auto;
+    max-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 6px 6px 6px 12px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+  .tool-options::-webkit-scrollbar {
+    display: none;
+  }
+  .tool-options > * {
+    flex: none;
+  }
+  .opt-field select,
+  .input-unit-small input,
+  .opt-length input {
+    height: 36px;
+    font-size: 16px;
+  }
+  .seg-small .seg-btn {
+    height: 32px;
+    padding: 0 11px;
+    font-size: var(--fs);
+  }
+  .opt-close {
+    width: 40px;
+    height: 40px;
+  }
+  .tool-options .btn-small {
+    height: 36px;
+  }
+  .seg-wrap {
+    flex-wrap: nowrap;
+  }
+
+  /* Кнопка «весь дом» вместо зума — масштаб щипком */
+  .zoom-ctrl {
+    right: calc(12px + var(--safe-right));
+    bottom: 14px;
+    padding: 2px;
+  }
+  .zoom-ctrl .zoom-fit {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  body.has-selection .zoom-ctrl {
+    bottom: 80px;
+  }
+
+  .hint-pill {
+    top: 66px;
+  }
+  .stage:not(.has-options) .hint-pill {
+    top: 12px;
+  }
+
+  /* 3D-панель */
+  .view3d-bar {
+    top: 8px;
+    left: calc(8px + var(--safe-left));
+    right: calc(8px + var(--safe-right));
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .view3d-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .v3-group {
+    flex: none;
+  }
+  .v3-btn {
+    height: 40px;
+    min-width: 40px;
+    justify-content: center;
+  }
+  .v3-btn span:not(.icon) {
+    display: none;
+  }
+
+  /* Стартовый экран */
+  .empty-state {
+    align-items: end;
+    padding: 12px;
+  }
+  .empty-card {
+    padding: 20px 16px 12px;
+    border-radius: var(--radius-xl);
+  }
+  .empty-card h2 {
+    font-size: 21px;
+  }
+  .empty-action {
+    padding: 12px;
+  }
+
+  /* Модальные окна — шторкой снизу */
+  .modal-overlay {
+    place-items: end stretch;
+    padding: 0;
+  }
+  .modal,
+  .modal-wide {
+    width: 100%;
+    max-height: calc(100dvh - var(--safe-top) - 24px);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation: sheet-up 0.24s var(--ease-out);
+  }
+  .modal-body {
+    padding: 8px 16px calc(16px + var(--safe-bottom));
+  }
+  .modal-head {
+    padding: 14px 10px 6px 16px;
+  }
+  .modal-actions {
+    padding: 12px 16px calc(14px + var(--safe-bottom));
+  }
+  .modal-actions .btn {
+    flex: 1;
+  }
+  .preset-grid {
+    grid-template-columns: 1fr;
+  }
+  .preset-thumb {
+    height: 170px;
+  }
+  .modal-tabs {
+    display: flex;
+  }
+  .modal-tabs .seg-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Контекстное меню — шторкой */
+  .ctx-menu.sheet {
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    max-width: none;
+    padding: 8px 8px calc(10px + var(--safe-bottom));
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation: sheet-up 0.22s var(--ease-out);
+  }
+  .ctx-overlay.sheet {
+    background: var(--overlay);
+  }
+  .ctx-menu.sheet .ctx-item {
+    min-height: 50px;
+    font-size: var(--fs-l);
+  }
+  .ctx-menu.sheet .ctx-item kbd {
+    display: none;
+  }
+  .ctx-menu.sheet .ctx-title {
+    font-size: var(--fs-m);
+    padding: 8px 12px;
+  }
+
+  .toasts {
+    bottom: calc(var(--bottom-h) + var(--safe-bottom) + 76px);
+  }
+  .menu {
+    min-width: min(300px, calc(100vw - 16px));
+  }
+  .menu-item {
+    min-height: 46px;
+    font-size: var(--fs-m);
+  }
+  .menu-item kbd {
+    display: none;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}

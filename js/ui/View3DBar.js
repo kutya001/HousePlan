@@ -31,12 +31,17 @@ export class View3DBar {
       h('div', { class: 'v3-group' }, this.toggles),
       h('div', { class: 'v3-group' }, btn('image', 'Снимок', () => app.file.export3DPNG(), 'Сохранить картинку 3D-вида')),
     );
-    this.walkHint = h('div', { class: 'walk-hint', hidden: true }, 'W A S D — идти, Shift — быстрее, мышь — оглядеться, Esc — выйти');
+    this.walkHint = h('div', { class: 'walk-hint', hidden: true });
     root.parentElement.append(this.walkHint);
     app.bus.on('settings:changed', () => this.sync());
     app.bus.on('walk:changed', ({ walking }) => {
+      this.walkHint.textContent = app.state.coarse
+        ? 'Джойстик — идти, палец по экрану — оглядеться'
+        : 'W A S D — идти, Shift — быстрее, мышь — оглядеться, Esc — выйти';
       this.walkHint.hidden = !walking;
+      document.body.classList.toggle('walking', walking);
       this.walkBtn.classList.toggle('active', walking);
+      if (walking) setTimeout(() => (this.walkHint.hidden = true), 6000);
     });
     this.sync();
   }

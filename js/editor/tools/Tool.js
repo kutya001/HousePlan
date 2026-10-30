@@ -67,6 +67,22 @@ export class Tool {
   contextClick() {
     this.cancel();
   }
+  /** Долгое нажатие пальцем; по умолчанию — как правый клик. */
+  longPress(e) {
+    this.contextClick(e);
+  }
+  /** Текущее касание прервано (второй палец, системный жест) — без потери начатого. */
+  pointerCancel() {
+    this.cancel();
+  }
+  /** Кнопки действий для панели параметров (например, «Готово», «Убрать точку»). */
+  actions() {
+    return [];
+  }
+  /** Сообщить панели, что действия/параметры поменялись. */
+  refreshOptions() {
+    this.app.bus.emit('tool:options-refresh');
+  }
   keyDown() {
     return false;
   }

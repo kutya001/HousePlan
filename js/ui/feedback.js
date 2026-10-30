@@ -2,15 +2,38 @@
 import { h, icon } from './dom.js';
 
 export function createToaster(root) {
-  return (text, kind = 'info') => {
-    const el = h('div', { class: `toast toast-${kind}`, role: 'status' }, text);
+  /**
+   * @param text
+   * @param kind 'info' | 'warn'
+   * @param opts { action: { label, onClick }, duration }
+   */
+  return (text, kind = 'info', opts = {}) => {
+    const el = h('div', { class: `toast toast-${kind} ${opts.action ? 'toast-action' : ''}`, role: 'status' }, h('span', {}, text));
+    let timer;
+    const hide = () => {
+      clearTimeout(timer);
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 250);
+    };
+    if (opts.action) {
+      el.append(
+        h(
+          'button',
+          {
+            type: 'button',
+            onclick: () => {
+              hide();
+              opts.action.onClick();
+            },
+          },
+          opts.action.label,
+        ),
+      );
+    }
     root.append(el);
     while (root.children.length > 3) root.firstChild.remove();
     requestAnimationFrame(() => el.classList.add('show'));
-    setTimeout(() => {
-      el.classList.remove('show');
-      setTimeout(() => el.remove(), 250);
-    }, kind === 'warn' ? 3800 : 2600);
+    timer = setTimeout(hide, opts.duration ?? (opts.action ? 5200 : kind === 'warn' ? 3800 : 2600));
   };
 }
 

@@ -27,22 +27,38 @@ export class SelectTool extends Tool {
   }
 
   cancel() {
-    if (this.mode && this.mode !== 'marquee' && this.mode !== 'pending') this.store.cancelGesture();
+    if (this.mode && !['marquee', 'pending', 'pan'].includes(this.mode)) this.store.cancelGesture();
     this.mode = null;
     this.snap = null;
+    this.marquee = null;
+    this.info = null;
     this.render();
+  }
+
+  get shortHint() {
+    return this.marqueeArmed ? 'Проведите пальцем — выделю всё в рамке' : 'Нажмите на объект, чтобы выбрать. Долгое нажатие — меню действий.';
   }
 
   pointerDown(e) {
     const handles = computeHandles(this.editor);
-    const h = hitHandle(handles, e.world, this.px(10));
+    const h = hitHandle(handles, e.world, this.px(e.touch ? 22 : 10));
     this.start = e.world;
     this.startScreen = e.screen;
+    this.startClient = e.client;
+    this.lastClient = e.client;
     if (h) {
       this._beginHandle(h, e);
       return;
     }
-    const hit = this.editor.hitTest(e.world);
+    const hit = this.marqueeArmed ? null : this.editor.hitTest(e.world, { tolPx: e.touch ? 14 : 6 });
+    // пальцем объект двигается, только если уже выделен: касание — выделить, затем тянуть.
+    // Так случайный сдвиг плана не портит стены.
+    if (hit && e.touch && !this.state.isSelected(hit.kind, hit.id)) {
+      this.mode = 'pan';
+      this.panMoved = false;
+      this.tapHit = hit;
+      return;
+    }
     if (hit) {
       if (e.shift) {
         this.state.select(hit, true);
@@ -54,19 +70,34 @@ export class SelectTool extends Tool {
       this.mode = 'pending';
       return;
     }
-    if (!e.shift) this.state.clearSelection();
+    this.tapHit = null;
+    if (e.touch && !this.marqueeArmed) {
+      // палец по пустому месту двигает план
+      this.mode = 'pan';
+      this.panMoved = false;
+      return;
+    }
+    if (!e.shift && !this.marqueeArmed) this.state.clearSelection();
     this.mode = 'marquee';
-    this.marqueeAdd = e.shift;
+    this.marqueeAdd = e.shift || this.marqueeArmed;
     this.marquee = { a: e.world, b: e.world };
   }
 
   pointerMove(e) {
     if (!this.mode) {
-      this._hover(e);
+      if (!e.touch) this._hover(e);
+      return;
+    }
+    if (this.mode === 'pan') {
+      const dx = e.client.x - this.lastClient.x;
+      const dy = e.client.y - this.lastClient.y;
+      this.lastClient = e.client;
+      if (dist(e.client, this.startClient) > DRAG_START_PX) this.panMoved = true;
+      this.editor.panBy(dx, dy);
       return;
     }
     if (this.mode === 'pending') {
-      if (dist(e.screen, this.startScreen) < DRAG_START_PX) return;
+      if (dist(e.screen, this.startScreen) < (e.touch ? 8 : DRAG_START_PX)) return;
       this._beginMove(e);
     }
     if (this.mode === 'move') this._move(e);
@@ -79,7 +110,10 @@ export class SelectTool extends Tool {
   }
 
   pointerUp(e) {
-    if (this.mode === 'pending') {
+    if (this.mode === 'pan') {
+      if (!this.panMoved) this.state.select(this.tapHit || null);
+      this.tapHit = null;
+    } else if (this.mode === 'pending') {
       // простой клик по уже выделенному среди нескольких — оставить только его
       if (this.state.selection.length > 1 && this.pendingHit) this.state.select(this.pendingHit);
     } else if (this.mode === 'marquee') {
@@ -91,16 +125,40 @@ export class SelectTool extends Tool {
           const keys = new Set(this.state.selection.map((s) => `${s.kind}:${s.id}`));
           this.state.setSelection([...this.state.selection, ...found.filter((f) => !keys.has(`${f.kind}:${f.id}`))]);
         } else this.state.setSelection(found);
+        if (this.marqueeArmed && found.length) this.toast(`Выделено: ${this.state.selection.length}`);
       }
       this.marquee = null;
+      if (this.marqueeArmed) {
+        this.marqueeArmed = false;
+        this.app.bus.emit('hint:show', { text: '' });
+      }
     } else if (this.mode) {
       this.store.endGesture();
     }
     this.mode = null;
     this.snap = null;
     this.info = null;
-    this._hover(e);
+    if (!e.touch) this._hover(e);
     this.render();
+  }
+
+  /** Правый клик или долгое нажатие — меню действий для объекта под курсором. */
+  contextClick(e) {
+    if (this.mode && this.mode !== 'pan') this.cancel();
+    this.mode = null;
+    const hit = this.editor.hitTest(e.world, { tolPx: e.touch ? 14 : 6 });
+    if (hit && !this.state.isSelected(hit.kind, hit.id)) this.state.select(hit);
+    this.app.openContextMenu?.({ client: e.client, world: e.world, hit, touch: e.touch });
+  }
+
+  longPress(e) {
+    this.contextClick(e);
+  }
+
+  /** Следующее движение пальцем выделит объекты рамкой. */
+  armMarquee() {
+    this.marqueeArmed = true;
+    this.app.bus.emit('hint:show', { text: this.shortHint, sticky: true });
   }
 
   doubleClick(e) {
@@ -118,7 +176,8 @@ export class SelectTool extends Tool {
   }
 
   keyDown(ev) {
-    if (ev.code === 'Escape' && this.mode) {
+    if (ev.code === 'Escape' && (this.mode || this.marqueeArmed)) {
+      this.marqueeArmed = false;
       this.cancel();
       return true;
     }
@@ -173,7 +232,7 @@ export class SelectTool extends Tool {
       const b = ref2.orig;
       const L = dist(a, b) || 1;
       const n = { x: -(b.y - a.y) / L, y: (b.x - a.x) / L };
-      const k = snapValue(dot(delta, n), e.alt ? 0.001 : DEFAULTS.grid);
+      const k = snapValue(dot(delta, n), e.alt ? 0.001 : this.editor.gridStep);
       delta = mul(n, k);
       this.info = { p: mid(add(a, delta), add(b, delta)), text: `сдвиг ${fmtLen(Math.abs(k))}` };
     } else if (s && (s.ref.kind === 'item' || s.ref.kind === 'stair' || s.ref.kind === 'roof')) {
@@ -188,13 +247,13 @@ export class SelectTool extends Tool {
         rotation = snapped.rotation;
       } else if (!e.alt) {
         const sn = this.editor.snapper.snap(c, { walls: false, itemPoints: false, radiusPx: 8 });
-        c = { x: snapValue(c.x, DEFAULTS.grid), y: snapValue(c.y, DEFAULTS.grid) };
+        c = { x: snapValue(c.x, this.editor.gridStep), y: snapValue(c.y, this.editor.gridStep) };
         if (sn.guides.length) c = sn.point;
         this.snap = sn.guides.length ? sn : null;
       }
       delta = sub(c, orig);
     } else if (!e.alt) {
-      delta = { x: snapValue(delta.x, DEFAULTS.grid), y: snapValue(delta.y, DEFAULTS.grid) };
+      delta = { x: snapValue(delta.x, this.editor.gridStep), y: snapValue(delta.y, this.editor.gridStep) };
     }
 
     this.store.gesture(() => {
@@ -273,7 +332,7 @@ export class SelectTool extends Tool {
     } else if (h.type === 'resize') {
       const o = this.resizeOrigin;
       const local = toLocal(ev.world, o.x, o.y, e.rotation || 0);
-      const step = ev.alt ? 0.001 : DEFAULTS.grid;
+      const step = ev.alt ? 0.001 : this.editor.gridStep;
       const w = Math.max(0.1, snapValue(local.x, step));
       const d = Math.max(0.1, snapValue(local.y, step));
       const c = toWorld({ x: w / 2, y: d / 2 }, o.x, o.y, e.rotation || 0);
@@ -334,7 +393,7 @@ export class SelectTool extends Tool {
     if (this.snap) drawSnapIndicator(ctx, r, this.snap, THEME);
     if (this.info) {
       const p = this.info.offset ? add(this.info.p, { x: r.px(14), y: r.px(-14) }) : this.info.p;
-      r.label(ctx, p, this.info.text, { size: 12, weight: 600, color: '#fff', bg: THEME.accent, halo: false, align: this.info.offset ? 'left' : 'center' });
+      r.label(ctx, p, this.info.text, { size: 12, weight: 600, color: THEME.labelInk, bg: THEME.accent, halo: false, align: this.info.offset ? 'left' : 'center' });
     }
   }
 }

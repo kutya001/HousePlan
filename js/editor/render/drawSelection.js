@@ -66,23 +66,23 @@ function drawHandles(ctx, r, handles) {
       ctx.strokeStyle = THEME.accent;
       ctx.lineWidth = r.px(1.2);
       ctx.stroke();
-      r.dot(ctx, h.pos, 6, '#fff', THEME.accent, 2);
+      r.dot(ctx, h.pos, 6 * r.hs, THEME.handleFill, THEME.accent, 2);
       // значок поворота
       ctx.beginPath();
       ctx.arc(h.pos.x, h.pos.y, r.px(2.8), -Math.PI * 0.9, Math.PI * 0.4);
       ctx.lineWidth = r.px(1.2);
       ctx.stroke();
     } else if (h.type === 'resize') {
-      const s = r.px(9);
-      ctx.fillStyle = '#fff';
+      const s = r.px(9 * r.hs);
+      ctx.fillStyle = THEME.handleFill;
       ctx.strokeStyle = THEME.accent;
       ctx.lineWidth = r.px(2);
       ctx.fillRect(h.pos.x - s / 2, h.pos.y - s / 2, s, s);
       ctx.strokeRect(h.pos.x - s / 2, h.pos.y - s / 2, s, s);
     } else if (h.type === 'edge-mid') {
-      r.dot(ctx, h.pos, 3.5, THEME.accent, '#fff', 1.2);
+      r.dot(ctx, h.pos, 3.5 * r.hs, THEME.accent, THEME.handleFill, 1.2);
     } else {
-      r.dot(ctx, h.pos, 6, '#fff', THEME.accent, 2);
+      r.dot(ctx, h.pos, 6 * r.hs, THEME.handleFill, THEME.accent, 2);
     }
   }
 }

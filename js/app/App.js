@@ -8,22 +8,31 @@ import { AppState } from './AppState.js';
 import { Commands } from './commands.js';
 import { FileActions } from './fileActions.js';
 import { setupShortcuts } from './shortcuts.js';
+import { buildContextItems, contextTitle } from './contextActions.js';
+import { setupPWA } from './pwa.js';
 import { createEmptyProject } from '../model/project.js';
 import { loadSavedProject, setupAutosave } from '../io/storage.js';
 import { Editor2D } from '../editor/Editor2D.js';
+import { applyCanvasTheme } from '../editor/render/theme.js';
 import { createToaster, confirmDialog } from '../ui/feedback.js';
+import { openMenu } from '../ui/ContextMenu.js';
 import { TopBar } from '../ui/TopBar.js';
-import { Toolbar } from '../ui/Toolbar.js';
+import { Toolbar, BottomBar } from '../ui/Toolbar.js';
 import { ToolOptionsBar } from '../ui/ToolOptionsBar.js';
 import { SidePanel } from '../ui/SidePanel.js';
 import { StatusBar } from '../ui/StatusBar.js';
 import { EmptyState } from '../ui/EmptyState.js';
 import { PresetsDialog } from '../ui/PresetsDialog.js';
 import { HelpDialog } from '../ui/HelpDialog.js';
+import { SettingsDialog } from '../ui/SettingsDialog.js';
+import { CommandPalette } from '../ui/CommandPalette.js';
 import { View3DBar } from '../ui/View3DBar.js';
+import { SelectionBar } from '../ui/SelectionBar.js';
+import { HintPill } from '../ui/HintPill.js';
 
 const VIEW_KEY = 'houseplan.view.v1';
 const $ = (id) => document.getElementById(id);
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 export class App {
   constructor() {
@@ -48,20 +57,35 @@ export class App {
   }
 
   start() {
+    this.applyTheme();
+    this._syncLayoutAttr();
     this.editor = new Editor2D(this, $('plan-host'));
     this.ui.presets = new PresetsDialog(this);
     this.ui.help = new HelpDialog(this);
+    this.ui.settings = new SettingsDialog(this);
+    this.ui.palette = new CommandPalette(this);
+    this.ui.side = new SidePanel(this, $('side'));
     this.ui.topbar = new TopBar(this, $('topbar'));
     this.ui.toolbar = new Toolbar(this, $('rail'));
-    this.ui.side = new SidePanel(this, $('side'));
+    this.ui.bottombar = new BottomBar(this, $('bottombar'));
     this.ui.toolOptions = new ToolOptionsBar(this, $('tool-options'));
     this.ui.status = new StatusBar(this, $('statusbar'), $('zoom-ctrl'));
     this.ui.empty = new EmptyState(this, $('empty-state'));
     this.ui.view3dBar = new View3DBar(this, $('view3d-bar'));
+    this.ui.selectionBar = new SelectionBar(this, $('selection-bar'));
+    this.ui.hint = new HintPill(this, $('hint-pill'));
 
     setupShortcuts(this);
     setupAutosave(this.bus, this.store);
+    this.pwa = setupPWA(this);
     this.editor.setTool('select');
+
+    this.bus.on('settings:changed', ({ key }) => {
+      if (key === 'theme') this.applyTheme();
+      if (key === 'gridStep') this.toast(`Шаг привязки: ${Math.round(this.state.settings.gridStep * 100)} см`);
+    });
+    darkQuery.addEventListener('change', () => this.state.settings.theme === 'system' && this.applyTheme());
+    this.bus.on('layout:changed', () => this._onLayout());
 
     let view = null;
     try {
@@ -69,11 +93,39 @@ export class App {
     } catch {
       /* нет доступа к хранилищу */
     }
-    this.setViewMode(view || (window.innerWidth > 1180 ? 'split' : 'plan'));
+    if (!view) view = window.innerWidth > 1180 ? 'split' : 'plan';
+    if (this.state.isPhone && view === 'split') view = 'plan';
+    this.setViewMode(view);
     document.body.classList.add('ready');
   }
 
+  /** Тема интерфейса и чертежа: светлая, тёмная или как в системе. */
+  applyTheme() {
+    const pref = this.state.settings.theme || 'system';
+    const dark = pref === 'dark' || (pref === 'system' && darkQuery.matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    applyCanvasTheme(dark);
+    $('meta-theme')?.setAttribute('content', dark ? '#1c2228' : '#fbfcfc');
+    this.bus.emit('theme:changed', { dark });
+    this.editor?.requestRender();
+  }
+
+  _syncLayoutAttr() {
+    document.body.dataset.layout = this.state.layout;
+    document.body.classList.toggle('coarse', this.state.coarse);
+  }
+
+  _onLayout() {
+    this._syncLayoutAttr();
+    if (this.state.isPhone && this.state.viewMode === 'split') this.setViewMode('plan');
+    requestAnimationFrame(() => {
+      this.editor.resize();
+      this.view3d?.resize();
+    });
+  }
+
   async setViewMode(mode) {
+    if (this.state.isPhone && mode === 'split') mode = 'plan';
     this.state.setViewMode(mode);
     $('stage').dataset.view = mode;
     try {
@@ -88,6 +140,18 @@ export class App {
     requestAnimationFrame(() => {
       this.editor.resize();
       this.view3d?.resize();
+    });
+  }
+
+  /** Контекстное меню: ПКМ на ПК, долгое нажатие на сенсорном экране. */
+  openContextMenu({ client, world, hit, touch }) {
+    const items = buildContextItems(this, { hit, world });
+    openMenu(this, {
+      x: client.x,
+      y: client.y,
+      title: contextTitle(this, hit),
+      items,
+      sheet: this.state.isPhone || (touch && this.state.compact),
     });
   }
 

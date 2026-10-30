@@ -28,7 +28,7 @@ export function snapToWall(editor, center, depth, width, { threshold } = {}) {
   if (!best) return null;
   const { g, side } = best;
   const half = width / 2;
-  let along = snapValue(best.along, DEFAULTS.grid);
+  let along = snapValue(best.along, editor.gridStep);
   // не вылезать за концы стены, если объект короче стены
   if (g.len > width) along = Math.max(half, Math.min(g.len - half, along));
   const pos = add(add(g.a, mul(g.d, along)), mul(g.n, side * (g.half + depth / 2)));
@@ -57,7 +57,7 @@ export function findWallForOpening(editor, p, width, ignoreId = null) {
   }
   if (!best) return null;
   const { g } = best;
-  let t = snapValue(best.along, DEFAULTS.grid);
+  let t = snapValue(best.along, editor.gridStep);
   if (Math.abs(t - g.len / 2) < Math.max(0.08, editor.viewport.px(8))) t = g.len / 2;
   const minT = width / 2 + 0.05;
   const maxT = g.len - width / 2 - 0.05;

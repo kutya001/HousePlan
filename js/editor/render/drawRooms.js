@@ -1,5 +1,5 @@
 /** Полы комнат и подписи (название + чистая площадь). */
-import { THEME, tint } from './theme.js';
+import { THEME, floorFill } from './theme.js';
 import { FLOOR_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, polygonLabelPoint } from '../../core/geometry.js';
 import { fmtArea } from '../../core/format.js';
@@ -10,7 +10,7 @@ export function drawRooms(ctx, r) {
   for (const room of rooms) {
     const mat = FLOOR_MATERIALS[room.floor] || FLOOR_MATERIALS.laminate;
     r.path(ctx, room.points);
-    ctx.fillStyle = tint(mat.color, 0.5);
+    ctx.fillStyle = floorFill(mat.color);
     ctx.fill();
     if (r.vp.scale > 35) {
       ctx.save();

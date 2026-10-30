@@ -27,7 +27,7 @@ export class Snapper {
     const project = editor.project;
     const levelId = state.activeLevelId;
     const R = editor.viewport.px(opts.radiusPx || 12);
-    const grid = opts.grid ?? DEFAULTS.grid;
+    const grid = opts.grid ?? editor.gridStep;
     const snapOn = state.settings.snap && !opts.disabled;
     const from = opts.from || null;
     const exclude = opts.excludeWalls || new Set();
@@ -191,6 +191,6 @@ export function drawSnapIndicator(ctx, r, snap, THEME) {
     ctx.strokeRect(-s / 2, -s / 2, s, s);
     ctx.restore();
   } else {
-    r.dot(ctx, p, 3, THEME.accent, '#fff', 1.2);
+    r.dot(ctx, p, 3, THEME.accent, THEME.handleFill, 1.2);
   }
 }

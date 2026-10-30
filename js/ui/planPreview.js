@@ -2,7 +2,7 @@
 import { computeWallGeometry } from '../geometry/wallGeometry.js';
 import { bboxOf } from '../core/geometry.js';
 import { FLOOR_MATERIALS } from '../model/defaults.js';
-import { tint } from '../editor/render/theme.js';
+import { THEME, floorFill } from '../editor/render/theme.js';
 
 export function drawPlanPreview(canvas, project) {
   const ctx = canvas.getContext('2d');
@@ -30,11 +30,11 @@ export function drawPlanPreview(canvas, project) {
     ctx.beginPath();
     r.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
     ctx.closePath();
-    ctx.fillStyle = tint((FLOOR_MATERIALS[r.floor] || FLOOR_MATERIALS.laminate).color, 0.45);
+    ctx.fillStyle = floorFill((FLOOR_MATERIALS[r.floor] || FLOOR_MATERIALS.laminate).color);
     ctx.fill();
   }
   const geoms = computeWallGeometry(walls);
-  ctx.fillStyle = '#2b3036';
+  ctx.fillStyle = THEME.wallExt;
   for (const g of geoms.values()) {
     ctx.beginPath();
     g.poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
@@ -44,7 +44,7 @@ export function drawPlanPreview(canvas, project) {
   if (project.levels.length > 1) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.font = '600 11px "Golos Text", system-ui, sans-serif';
-    ctx.fillStyle = '#4a5560';
+    ctx.fillStyle = THEME.muted;
     ctx.fillText(`${project.levels.length} этажа`, 8, H - 8);
   }
 }

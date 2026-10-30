@@ -43,7 +43,12 @@ export class Commands {
       for (const s of sel) removeEntity(p, s.kind, s.id);
     });
     this.state.clearSelection();
-    this.app.toast(sel.length > 1 ? `Удалено объектов: ${sel.length}` : 'Удалено');
+    this.app.toast(sel.length > 1 ? `Удалено объектов: ${sel.length}` : 'Удалено', 'info', this._undoAction());
+  }
+
+  /** Кнопка «Отменить» в уведомлении после необратимых на вид действий. */
+  _undoAction() {
+    return { action: { label: 'Отменить', onClick: () => this.undo() } };
   }
 
   _snapshotSelection() {
@@ -200,6 +205,7 @@ export class Commands {
     this.app.confirm(`Удалить «${lvl?.name}» со всеми стенами и мебелью?`, 'Удалить этаж').then((ok) => {
       if (!ok) return;
       this.store.commit((p) => removeLevel(p, levelId));
+      this.app.toast(`«${lvl?.name}» удалён`, 'info', this._undoAction());
     });
   }
 
@@ -257,12 +263,13 @@ export class Commands {
   }
 
   async applyHousePreset(id, params) {
-    if (this._hasContent() && !(await this.app.confirm('Заменить текущий проект пресетом? Действие можно отменить (Ctrl+Z).', 'Заменить'))) return false;
+    this._hadContentBeforeLoad = this._hasContent();
+    if (this._hadContentBeforeLoad && !(await this.app.confirm('Заменить текущий проект пресетом? Действие можно отменить (Ctrl+Z).', 'Заменить'))) return false;
     const project = buildHousePreset(id, params);
     if (!project) return false;
     this._load(normalizeProject(project), true);
     const name = HOUSE_PRESETS.find((p) => p.id === id)?.name;
-    this.app.toast(`Загружен пресет «${name}»`);
+    this.app.toast(`Загружен пресет «${name}»`, 'info', this._hadContentBeforeLoad ? this._undoAction() : {});
     return true;
   }
 

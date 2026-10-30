@@ -35,6 +35,11 @@ export class Renderer2D {
     return this.editor.app.state.settings;
   }
 
+  /** Множитель размера ручек: на сенсорных экранах крупнее. */
+  get hs() {
+    return this.state.coarse ? 1.5 : 1;
+  }
+
   /** n экранных пикселей в метрах. */
   px(n) {
     return n / this.vp.scale;
@@ -115,7 +120,7 @@ export class Renderer2D {
         ctx.fill();
       }
       if (opts.halo !== false) {
-        ctx.strokeStyle = opts.haloColor || 'rgba(237, 241, 243, 0.92)';
+        ctx.strokeStyle = opts.haloColor || THEME.halo;
         ctx.lineWidth = 3.5;
         ctx.lineJoin = 'round';
         ctx.strokeText(text, 0, 0);
@@ -126,7 +131,7 @@ export class Renderer2D {
   }
 
   /** Маркер-кружок в экранных пикселях. */
-  dot(ctx, p, radiusPx, fill, stroke = '#fff', strokePx = 1.5) {
+  dot(ctx, p, radiusPx, fill, stroke = THEME.handleFill, strokePx = 1.5) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, this.px(radiusPx), 0, Math.PI * 2);
     ctx.fillStyle = fill;

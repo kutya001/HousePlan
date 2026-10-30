@@ -1,5 +1,5 @@
 /** Лестницы: ступени, линия хода со стрелкой, проём на этаже выше. */
-import { THEME, tint } from './theme.js';
+import { THEME, floorFill, tint } from './theme.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { getLevel, levelWallHeight } from '../../model/project.js';
 import { sub, norm, add, mul, perp } from '../../core/geometry.js';
@@ -18,7 +18,7 @@ export function drawStairs(ctx, r) {
     ctx.strokeStyle = THEME.itemStroke;
     for (const st of lay.steps) {
       r.path(ctx, st.poly);
-      ctx.fillStyle = tint(s.color, st.landing ? 0.45 : 0.6);
+      ctx.fillStyle = THEME.dark ? floorFill(s.color) : tint(s.color, st.landing ? 0.45 : 0.6);
       ctx.fill();
       ctx.stroke();
     }
@@ -64,7 +64,7 @@ export function drawStairwellsFromBelow(ctx, r, belowId) {
     const lay = stairLayout(s, stairRise(r.project, s));
     ctx.save();
     r.path(ctx, lay.outline);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillStyle = THEME.voidFill;
     ctx.fill();
     ctx.setLineDash([r.px(6), r.px(4)]);
     ctx.lineWidth = r.px(1.2);

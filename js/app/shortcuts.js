@@ -44,6 +44,14 @@ export const SHORTCUT_HELP = [
     ['X / Shift+X', 'Дверь: сторона открывания / петли'],
     ['Стрелки', 'Сдвинуть на 5 см (с Shift — на 50 см)'],
     ['Esc', 'Отмена, затем инструмент «Выбор»'],
+    ['Правая кнопка', 'Меню действий для объекта'],
+  ]],
+  ['Телефон и планшет', [
+    ['Касание', 'Выбрать объект; по пустому месту — снять выделение'],
+    ['Палец по пустому месту', 'Сдвинуть план'],
+    ['Два пальца', 'Масштаб и сдвиг'],
+    ['Долгое нажатие', 'Меню действий'],
+    ['Рисование', 'Точка ставится, когда отпускаете палец'],
   ]],
   ['Во время рисования', [
     ['Число + Enter', 'Точная длина стены, м (для коробки: 8x10)'],
@@ -63,6 +71,8 @@ export const SHORTCUT_HELP = [
   ['Файл', [
     ['Ctrl+S', 'Сохранить проект в файл'],
     ['Ctrl+O', 'Открыть файл проекта'],
+    ['Ctrl+K', 'Поиск команд'],
+    ['Ctrl+,', 'Настройки'],
     ['F1 или ?', 'Эта справка'],
   ]],
 ];
@@ -102,10 +112,13 @@ export function setupShortcuts(app) {
       else if (code === 'KeyA') cmd.selectAll();
       else if (code === 'KeyS') app.file.save();
       else if (code === 'KeyO') app.file.open();
+      else if (code === 'KeyK') app.ui.palette.open();
+      else if (code === 'Comma') app.ui.settings.open();
       else handled = false;
     } else if (code === 'Delete' || code === 'Backspace') cmd.deleteSelection();
     else if (code === 'Escape') {
       if (app.state.toolId !== 'select') app.editor.setTool('select');
+      else if (app.ui.side.isOpen && app.state.compact) app.ui.side.close();
       else app.state.clearSelection();
     } else if (code.startsWith('Arrow') && app.state.selection.length) {
       const s = ev.shiftKey ? 0.5 : 0.05;

@@ -35,7 +35,16 @@ export class StatusBar {
       h('button', { class: 'icon-btn', 'aria-label': 'Уменьшить', onclick: () => app.editor.zoomBy(0.8) }, icon('minus', 18)),
       this.zoomLabel,
       h('button', { class: 'icon-btn', 'aria-label': 'Увеличить', onclick: () => app.editor.zoomBy(1.25) }, icon('plus', 18)),
-      h('button', { class: 'icon-btn', 'data-tip': 'Весь участок', 'aria-label': 'Весь участок', onclick: () => app.editor.fitToContent({ includeSite: true }) }, icon('fit', 18)),
+      h(
+        'button',
+        {
+          class: 'icon-btn zoom-fit',
+          'data-tip': 'Весь участок',
+          'aria-label': 'Показать всё',
+          onclick: () => app.editor.fitToContent({ includeSite: !app.state.isPhone }),
+        },
+        icon('fit', 18),
+      ),
     );
 
     app.bus.on('hint:changed', ({ text }) => (this.hint.textContent = text));

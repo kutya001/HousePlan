@@ -53,7 +53,7 @@ export function drawOpening(ctx, r, g, o, { ghost = false } = {}) {
 
 function drawWindow(ctx, r, g, o, f) {
   r.path(ctx, f.poly);
-  ctx.fillStyle = '#fbfcfc';
+  ctx.fillStyle = THEME.windowFill;
   ctx.fill();
   ctx.lineWidth = r.px(1.2);
   ctx.strokeStyle = THEME.ink;

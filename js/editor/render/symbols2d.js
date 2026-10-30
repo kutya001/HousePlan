@@ -3,7 +3,7 @@
  * Каждое обозначение рисуется в локальных координатах объекта:
  * центр в (0,0), ширина по X, глубина по Y, «спинка» — сторона −Y.
  */
-import { THEME, tint, shade } from './theme.js';
+import { THEME, tint, shade, itemFill } from './theme.js';
 
 const TAU = Math.PI * 2;
 
@@ -608,7 +608,7 @@ export function drawItemSymbol(ctx, item, lineWidth, { alpha = 1 } = {}) {
   ctx.rotate(((item.rotation || 0) * Math.PI) / 180);
   ctx.globalAlpha *= alpha;
   ctx.lineWidth = lineWidth;
-  ctx.fillStyle = tint(item.color || '#c9c3b8', 0.55);
+  ctx.fillStyle = itemFill(item.color || '#c9c3b8');
   ctx.strokeStyle = THEME.itemStroke;
   const fn = SYMBOLS[item.type] || SYMBOLS.box;
   fn(ctx, item.w, item.d, item.color || '#8dbb6e');

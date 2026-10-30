@@ -64,6 +64,8 @@ const check = (key, label) => ({
 });
 
 const rotation = num('rotation', 'Поворот', { unit: '°', min: -360, max: 360, step: 1 });
+const posX = num('x', 'Положение X', { min: -1000, max: 1000, step: 0.05, hint: 'Центр объекта, м' });
+const posY = num('y', 'Положение Y', { min: -1000, max: 1000, step: 0.05, hint: 'Центр объекта, м' });
 
 const readonly = (label, get) => ({ type: 'readonly', label, get });
 
@@ -133,6 +135,8 @@ export const SCHEMAS = {
     num('length', 'Длина', { min: 0.6, max: 10, visible: (s) => s.shape !== 'spiral' }),
     num('flight', 'Ширина марша', { min: 0.6, max: 2, visible: (s) => s.shape === 'L' || s.shape === 'U' }),
     rotation,
+    posX,
+    posY,
     check('flip', 'Зеркально'),
     color('color', 'Цвет'),
   ],
@@ -142,6 +146,8 @@ export const SCHEMAS = {
     num('d', 'Глубина', { min: 0.05, max: 30 }),
     num('h', 'Высота', { min: 0.01, max: 20 }),
     rotation,
+    posX,
+    posY,
     num('elevation', 'Над полом', { min: 0, max: 5 }),
     color('color', 'Цвет'),
   ],
@@ -152,6 +158,8 @@ export const SCHEMAS = {
     num('w', 'Ширина (вдоль конька)', { min: 1, max: 60 }),
     num('d', 'Глубина', { min: 1, max: 60 }),
     rotation,
+    posX,
+    posY,
     color('color', 'Цвет кровли'),
     readonly('Высота конька', (r) => {
       const t = Math.tan((r.pitch || 0) * DEG);

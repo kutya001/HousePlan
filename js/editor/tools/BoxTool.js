@@ -30,7 +30,28 @@ export class BoxTool extends Tool {
     this.input = '';
   }
 
+  get shortHint() {
+    return 'Протяните пальцем прямоугольник — или задайте размер сверху';
+  }
+
+  actions() {
+    return [{ type: 'dims', label: 'Размер', apply: (w, d) => this.createAtCenter(w, d) }];
+  }
+
+  /** Коробка заданного размера по центру экрана. */
+  createAtCenter(w, d) {
+    const vp = this.editor.viewport;
+    const c = vp.toWorld({ x: vp.width / 2, y: vp.height / 2 });
+    const step = this.editor.gridStep;
+    const x = Math.round((c.x - w / 2) / step) * step;
+    const y = Math.round((c.y - d / 2) / step) * step;
+    this.start = { x, y };
+    this._commit([w, d]);
+    this.editor.fitToContent();
+  }
+
   cancel() {
+    this.secondTouch = false;
     this.start = null;
     this.end = null;
     this.dragging = false;
@@ -54,6 +75,11 @@ export class BoxTool extends Tool {
       this.start = p;
       this.end = p;
       this.dragging = true;
+    } else if (e.touch) {
+      // второе касание: можно поводить пальцем, угол зафиксируется при отпускании
+      this.end = p;
+      this.secondTouch = true;
+      this.render();
     } else {
       this.end = p;
       this._commit();
@@ -61,6 +87,12 @@ export class BoxTool extends Tool {
   }
 
   pointerUp(e) {
+    if (this.secondTouch) {
+      this.secondTouch = false;
+      this.end = this._snap(e).point;
+      this._commit();
+      return;
+    }
     if (!this.dragging) return;
     this.dragging = false;
     const p = this._snap(e).point;
@@ -165,7 +197,7 @@ export class BoxTool extends Tool {
       r.label(ctx, { x: this.end.x + r.px(16), y: this.end.y + r.px(18) }, `Размер: ${this.input} м ⏎`, {
         size: 12,
         weight: 600,
-        color: '#fff',
+        color: THEME.labelInk,
         bg: THEME.ink,
         halo: false,
         align: 'left',

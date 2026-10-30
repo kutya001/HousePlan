@@ -49,7 +49,53 @@ export class WallTool extends Tool {
     this.chain = [];
     this.input = '';
     this.snap = null;
+    this.touchDown = false;
+    this.refreshOptions();
     this.render();
+  }
+
+  /** Второй палец или системный жест: точку не ставим, цепочка остаётся. */
+  pointerCancel() {
+    this.touchDown = false;
+    this.cursorPt = null;
+    this.snap = null;
+    this.render();
+  }
+
+  get shortHint() {
+    return this.chain.length ? 'Ведите пальцем к следующей точке и отпустите. «Готово» — закончить.' : 'Коснитесь там, где начинается стена';
+  }
+
+  actions() {
+    if (!this.chain.length) return [];
+    return [
+      { label: 'Готово', icon: 'check', primary: true, onClick: () => this.finish() },
+      {
+        label: this.chain.length > 1 ? 'Убрать отрезок' : 'Сбросить',
+        icon: 'undo',
+        onClick: () => this.undoPoint(),
+      },
+      { type: 'length', label: 'Длина', apply: (L) => this.applyLength(L) },
+    ];
+  }
+
+  /** Отменить последний отрезок цепочки. */
+  undoPoint() {
+    if (this.chain.length > 1) {
+      this.store.undo();
+      this.chain.pop();
+    } else this.chain = [];
+    this.refreshOptions();
+    this.render();
+  }
+
+  /** Отрезок заданной длины в направлении курсора (или вправо). */
+  applyLength(L) {
+    if (!(L > 0) || !this.chain.length) return;
+    const last = this.chain[this.chain.length - 1];
+    let dir = this.cursorPt ? norm(sub(this.cursorPt, last)) : { x: 1, y: 0 };
+    if (!dir.x && !dir.y) dir = { x: 1, y: 0 };
+    this._addPoint(add(last, mul(dir, L)));
   }
 
   _snap(e) {
@@ -63,6 +109,7 @@ export class WallTool extends Tool {
   }
 
   pointerMove(e) {
+    if (e.touch && !this.touchDown) return;
     this.snap = this._snap(e);
     this.cursorPt = this.snap.point;
     this.render();
@@ -71,6 +118,20 @@ export class WallTool extends Tool {
   pointerDown(e) {
     const sn = this._snap(e);
     this.snap = sn;
+    this.cursorPt = sn.point;
+    if (e.touch) {
+      // на сенсорном экране точка ставится, когда палец отпущен
+      this.touchDown = true;
+      this.render();
+      return;
+    }
+    this._addPoint(sn.point, sn);
+  }
+
+  pointerUp(e) {
+    if (!this.touchDown) return;
+    this.touchDown = false;
+    const sn = this._snap(e);
     this._addPoint(sn.point, sn);
   }
 
@@ -78,6 +139,8 @@ export class WallTool extends Tool {
     if (!this.chain.length) {
       this.chain = [p];
       this.startSnapType = sn?.type;
+      this.refreshOptions();
+      this.app.bus.emit('hint:show', { text: this.shortHint, touchOnly: true });
       this.render();
       return;
     }
@@ -96,6 +159,7 @@ export class WallTool extends Tool {
     this.input = '';
     const hitExisting = sn && (sn.type === 'wall' || (sn.type === 'endpoint' && sn.target?.src === 'wall'));
     if (closing || (hitExisting && this.chain.length >= 2)) this.finish();
+    else this.refreshOptions();
     this.render();
   }
 
@@ -110,6 +174,7 @@ export class WallTool extends Tool {
   finish() {
     this.chain = [];
     this.input = '';
+    this.refreshOptions();
     this.render();
   }
 
@@ -136,12 +201,8 @@ export class WallTool extends Tool {
     }
     if (ev.key === 'Enter') {
       const L = parseFloat(this.input);
-      if (L > 0) {
-        const last = this.chain[this.chain.length - 1];
-        let dir = this.cursorPt ? norm(sub(this.cursorPt, last)) : { x: 1, y: 0 };
-        if (!dir.x && !dir.y) dir = { x: 1, y: 0 };
-        this._addPoint(add(last, mul(dir, L)));
-      } else this.finish();
+      if (L > 0) this.applyLength(L);
+      else this.finish();
       return true;
     }
     if (ev.key === 'Escape') {
@@ -156,7 +217,7 @@ export class WallTool extends Tool {
   drawOverlay(ctx, r) {
     const last = this.chain[this.chain.length - 1];
     const cur = this.cursorPt;
-    for (const p of this.chain) r.dot(ctx, p, 3, THEME.accent, '#fff', 1);
+    for (const p of this.chain) r.dot(ctx, p, 3, THEME.accent, THEME.handleFill, 1);
     if (last && cur) {
       let end = cur;
       const L0 = parseFloat(this.input);
@@ -186,7 +247,7 @@ export class WallTool extends Tool {
       r.label(ctx, add(cur, { x: r.px(16), y: r.px(18) }), `Длина: ${this.input} м ⏎`, {
         size: 12,
         weight: 600,
-        color: '#fff',
+        color: THEME.labelInk,
         bg: THEME.ink,
         halo: false,
         align: 'left',
