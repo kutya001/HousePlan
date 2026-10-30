@@ -4,7 +4,7 @@
 
 Без сборки и без сервера: обычные ES-модули и Three.js, лежащий в репозитории. Выкладывается на GitHub Pages как есть.
 
-**Демо:** `https://kutya001.github.io/houseplan/` (после включения Pages, см. ниже)
+**Демо:** `https://kutya001.github.io/HousePlan/` (после включения Pages, см. ниже)
 
 ---
 
@@ -46,7 +46,7 @@
 ### GitHub Pages
 1. Откройте репозиторий → **Settings** → **Pages**.
 2. В **Build and deployment** выберите **Source: Deploy from a branch**, ветка `main`, папка `/ (root)` → **Save**.
-3. Через минуту приложение откроется по адресу `https://kutya001.github.io/houseplan/`.
+3. Через минуту приложение откроется по адресу `https://kutya001.github.io/HousePlan/`.
 
 Файл `.nojekyll` уже в корне — GitHub отдаёт файлы без обработки Jekyll.
 
@@ -54,7 +54,7 @@
 Браузер не загружает ES-модули с диска (`file://`), нужен любой статический сервер:
 
 ```bash
-cd houseplan
+cd HousePlan
 python -m http.server 8000
 # открыть http://localhost:8000
 ```
