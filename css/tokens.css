@@ -1,0 +1,58 @@
+/*
+ * Дизайн-токены. Идея: интерфейс — тихая чертёжная доска,
+ * всё внимание — на план. Один акцент — «чертёжный кобальт».
+ */
+:root {
+  --paper: #edf1f3; /* фон чертежа */
+  --surface: #fbfcfc; /* панели */
+  --surface-2: #f2f5f7; /* поля ввода, наведение */
+  --surface-3: #e7ecef; /* нажатое */
+  --line: #dde3e7;
+  --line-strong: #c4cdd3;
+
+  --ink: #1c2329;
+  --ink-2: #47525c;
+  --ink-3: #75818b;
+
+  --accent: #2456d6;
+  --accent-hover: #1b46b5;
+  --accent-soft: #e5ecfb;
+  --accent-ink: #183d9a;
+
+  --snap: #0e9f6e;
+  --guide: #d6336c;
+  --danger: #c9372c;
+  --danger-soft: #fbeae8;
+  --warn: #9a5b00;
+  --warn-soft: #fff3df;
+
+  --radius-s: 6px;
+  --radius: 8px;
+  --radius-l: 12px;
+  --shadow-float: 0 1px 2px rgba(20, 32, 44, 0.06), 0 8px 24px rgba(20, 32, 44, 0.1);
+  --shadow-modal: 0 24px 64px rgba(15, 25, 35, 0.22);
+
+  --font: 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs-xs: 11px;
+  --fs-s: 12px;
+  --fs: 13px;
+  --fs-m: 14px;
+  --fs-l: 16px;
+  --fs-xl: 21px;
+
+  --top-h: 52px;
+  --status-h: 30px;
+  --rail-w: 68px;
+  --side-w: 304px;
+
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(36, 86, 214, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>HousePlan — планировка дома и участка</title>
+    <meta name="description" content="Планировщик дома в браузере: участок, стены, окна и двери, этажи, лестницы, крыши и мебель. План и 3D одновременно." />
+    <meta name="theme-color" content="#fbfcfc" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232456d6'/%3E%3Cpath d='M7 15 16 7l9 8v10H7z' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M13 25v-6h6v6' fill='none' stroke='white' stroke-width='2.4'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/editor.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.min.js",
+          "three/addons/": "./vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="topbar" id="topbar"></header>
+      <nav class="rail" id="rail" aria-label="Инструменты"></nav>
+
+      <main class="stage" id="stage" data-view="plan">
+        <section class="pane pane-plan" id="pane-plan" aria-label="План">
+          <div class="plan-host" id="plan-host"></div>
+          <div class="tool-options" id="tool-options" hidden></div>
+          <div class="empty-state" id="empty-state" hidden></div>
+          <div class="zoom-ctrl" id="zoom-ctrl"></div>
+        </section>
+        <section class="pane pane-3d" id="pane-3d" aria-label="3D-вид">
+          <div class="view3d-host" id="view3d-host"></div>
+          <div class="view3d-bar" id="view3d-bar"></div>
+          <div class="view3d-loading" aria-hidden="true">Загружаю 3D…</div>
+        </section>
+      </main>
+
+      <aside class="side" id="side" aria-label="Этажи, свойства и каталог"></aside>
+      <footer class="statusbar" id="statusbar"></footer>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div id="modal-root"></div>
+
+    <div class="boot-error" id="boot-error" hidden>
+      <h1>Откройте приложение через веб-сервер</h1>
+      <p>Браузер не загружает модули из файла на диске. Запустите в папке проекта <code>python -m http.server</code> и откройте <code>http://localhost:8000</code> — или опубликуйте на GitHub Pages.</p>
+    </div>
+    <noscript>Для работы HousePlan нужен JavaScript.</noscript>
+    <script>
+      if (location.protocol === 'file:') document.getElementById('boot-error').hidden = false;
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
