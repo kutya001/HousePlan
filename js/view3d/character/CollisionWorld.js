@@ -33,19 +33,22 @@ export class CollisionWorld {
   _add(poly, y0, y1, info = {}) {
     if (!poly || poly.length < 3 || y1 - y0 < 1e-4) return;
     const bb = bboxOf(poly);
-    this.solids.push({ poly, holes: info.holes || null, y0, y1, bb, kind: info.kind || 'solid', ref: info.ref || null, doorId: info.doorId || null, noSide: !!info.noSide });
+    this.solids.push({ poly, holes: info.holes || null, y0, y1, bb, kind: info.kind || 'solid', ref: info.ref || null, doorId: info.doorId || null, noSide: !!info.noSide, levelId: info.levelId ?? this._lvl, site: !!this._site });
   }
 
   build(project) {
     this.solids = [];
+    this._site = false;
     this.levels = project.levels.map((l) => ({ id: l.id, base: levelElevation(project, l.id) }));
     // котлованы под подвалами: там нет грунта на отметке 0
     this.pits = excavationOutlines(project);
     // скаты крыш — «потолок» мансарды: под низким скатом не пройти во весь рост
     this.roofs = project.roofs.map((r) => roofPlanes(r, levelTop(project, r.levelId)));
     const ground = groundLevel(project);
+    this.groundId = ground?.id ?? project.levels[0]?.id ?? null;
     project.levels.forEach((level, i) => {
       const base = levelElevation(project, level.id);
+      this._lvl = level.id; // все тела этажа помнят свой этаж — по опоре под ногами видно, где манекен
       const walls = project.walls.filter((w) => w.levelId === level.id);
       const geoms = computeWallGeometry(walls);
       const ops = new Map();
@@ -65,11 +68,14 @@ export class CollisionWorld {
           const top = Math.min(o.sill + o.height, h);
           if (o.kind === 'window') this._add(poly, base + o.sill, base + top, { kind: 'glass', ref: { kind: 'opening', id: o.id } });
           else if (o.kind === 'door') this._add(poly, base + o.sill, base + top, { kind: 'door', doorId: o.id, ref: { kind: 'opening', id: o.id } });
-          // порог под дверью наружной стены на цоколе
-          if (i === 0 && g.wall.kind === 'exterior' && base > 0.01 && o.kind !== 'window') this._add(poly, 0, base, { kind: 'floor', noSide: true });
+          // порог под дверью: пол между комнатами не обрывается в толще стены
+          if (o.kind !== 'window' && o.sill < 0.05) {
+            if (i === 0 && g.wall.kind === 'exterior' && base > 0.01) this._add(poly, 0, base, { kind: 'floor', noSide: true });
+            else this._add(poly, base - 0.06, base, { kind: 'floor', noSide: true });
+          }
         }
       }
-      if (level === ground) for (const st of porchSteps(project, level.id, geoms, base)) this._add(st.poly, 0, st.top, { kind: 'stair' });
+      if (level === ground) for (const st of porchSteps(project, level.id, geoms, base)) this._add(st.poly, 0, st.top, { kind: 'porch' });
       // дно котлована подвала
       if (isBasement(level)) for (const fp of levelFootprints(walls)) this._add(fp, base - 0.35, base - 0.015, { kind: 'floor', noSide: true });
 
@@ -95,7 +101,9 @@ export class CollisionWorld {
       for (const it of project.items.filter((x) => x.levelId === level.id)) this._addItem(it, base);
     });
 
-    // зоны участка (терраса чуть выше газона) и объекты участка, забор
+    // зоны участка (терраса чуть выше газона) и объекты участка, забор — это земля первого этажа
+    this._lvl = this.groundId;
+    this._site = true;
     for (const z of project.zones) {
       const top = z.material === 'water' ? 0.015 : z.material === 'deck' ? 0.12 : 0.03;
       this._add(z.points, 0, top, { kind: 'floor', noSide: true, ref: { kind: 'zone', id: z.id } });
@@ -230,10 +238,31 @@ export class CollisionWorld {
     return true;
   }
 
-  /** Этаж, к которому относится высота ступней. */
-  levelAt(y) {
+  /**
+   * Этаж, на котором стоит манекен. Сначала — по опоре под ногами (пол комнаты,
+   * мебель, порог), на земле участка и крыльце — первый этаж; на лестнице и в прыжке —
+   * по высоте ступней.
+   */
+  /** Стоит ли манекен снаружи: на земле, дорожке, крыльце или объекте участка. */
+  outsideAt(x, z, y) {
+    const sup = this.supportAt(x, z, y + 0.06);
+    if (Math.abs(sup.y - y) > 0.25) return false;
+    const s = sup.solid;
+    return (!s && y > -0.6) || !!s?.site || s?.kind === 'porch';
+  }
+
+  levelAt(y, x = null, z = null) {
+    if (x != null && z != null) {
+      const sup = this.supportAt(x, z, y + 0.06);
+      const s = sup.solid;
+      if (s && s.kind !== 'stair' && Math.abs(sup.y - y) < 0.25 && s.levelId) return s.levelId;
+      if (!s && Math.abs(sup.y - y) < 0.25 && y > -0.6) return this.groundId;
+    }
     let id = this.levels[0]?.id;
-    for (const l of this.levels) if (y >= l.base - 0.6) id = l.id;
+    for (const l of this.levels) {
+      const from = l.id === this.groundId ? Math.min(l.base - 0.6, -0.45) : l.base - 0.6;
+      if (y >= from) id = l.id;
+    }
     return id;
   }
 }

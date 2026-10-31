@@ -4,7 +4,7 @@
  * копия кладётся в кэш; без сети приложение открывается из кэша.
  * Файлы попадают в кэш по мере использования (3D — после первого открытия 3D-вида).
  */
-const CACHE = 'houseplan-v5';
+const CACHE = 'houseplan-v6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -831,6 +831,9 @@ kbd {
   left: 50%;
   bottom: calc(var(--status-h) + 16px);
   transform: translateX(-50%);
+  /* без этого блок у left: 50% сжимается до половины экрана — тосты на телефоне узкие */
+  width: max-content;
+  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1028,6 +1031,31 @@ kbd {
   color: var(--danger);
   font-weight: 600;
 }
+.xch-check {
+  padding: 8px 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--fs-s);
+}
+.xch-check.bad {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.xch-check p {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.xch-check ul {
+  margin: 0;
+  padding-left: 26px;
+  color: var(--ink-2);
+}
 .xch-warn {
   margin: 0;
   padding-left: 18px;
@@ -1061,4 +1089,170 @@ kbd {
   .xch-table td:nth-child(n + 6) {
     display: none;
   }
+}
+
+/* ── Проверка проекта ───────────────────────────────────────────────── */
+.tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
+}
+.tab-badge.warn {
+  background: var(--warn-line);
+  color: var(--warn);
+}
+.tab-badge[hidden] {
+  display: none;
+}
+.checks-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.checks-head strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.checks-head small {
+  display: block;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+.checks-head.ok {
+  border-color: color-mix(in srgb, var(--snap) 40%, transparent);
+  background: color-mix(in srgb, var(--snap) 10%, var(--surface));
+}
+.checks-head.ok .icon {
+  color: var(--snap);
+}
+.checks-head.bad {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+.checks-head.bad .icon,
+.checks-head.bad strong {
+  color: var(--danger);
+}
+.checks-head.meh {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+}
+.checks-head.meh .icon,
+.checks-head.meh strong {
+  color: var(--warn);
+}
+.checks-fixall {
+  margin-top: 10px;
+  gap: 6px;
+}
+.checks-note {
+  margin: 12px 2px 0;
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+.checks-level {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 2px 6px;
+  font-size: var(--fs-s);
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: none;
+}
+.checks-level.active {
+  color: var(--ink);
+}
+.checks-count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11px;
+}
+.checks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.check-item.focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.check-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.check-dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.check-item.warn .check-dot {
+  background: #d99a1e;
+}
+.check-text b {
+  display: block;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.check-text small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+.check-fix {
+  flex: none;
+}
+.linklike {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }

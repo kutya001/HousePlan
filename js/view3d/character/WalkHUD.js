@@ -7,18 +7,19 @@ import { h, icon } from '../../ui/dom.js';
 export class WalkHUD {
   /**
    * @param host — контейнер панели 3D
-   * @param handlers { exit, toggleCamera, toggleCeiling, action, jump, sit, lie, run(on), move(x, y) }
+   * @param handlers { exit, toggleCamera, toggleCeiling, action, jump, sit, lie, run(on), move(x, y), respawn }
    */
   constructor(host, { touch, handlers }) {
     this.touch = touch;
     this.handlers = handlers;
     const hd = handlers;
-    this.camBtn = h('button', { class: 'btn walk-btn', onclick: () => hd.toggleCamera(), 'aria-label': 'Камера' }, icon('eye', 16), h('span', {}, 'Из глаз'));
-    this.ceilBtn = h('button', { class: 'btn walk-btn', onclick: () => hd.toggleCeiling(), 'aria-label': 'Этажи выше' }, icon('cut', 16), h('span', {}, 'Этажи выше'));
-    const exit = h('button', { class: 'btn walk-btn walk-exit', onclick: () => hd.exit() }, icon('close', 16), h('span', {}, 'Выйти'));
+    this.camBtn = h('button', { class: 'btn walk-btn', onclick: () => hd.toggleCamera(), 'aria-label': 'Камера', 'data-tip': 'Вид из глаз / со спины (V)' }, icon('eye', 16), h('span', {}, 'Из глаз'));
+    this.ceilBtn = h('button', { class: 'btn walk-btn', onclick: () => hd.toggleCeiling(), 'aria-label': 'Этажи выше', 'data-tip': 'Показать или скрыть этажи выше манекена' }, icon('cut', 16), h('span', {}, 'Этажи выше'));
+    const exit = h('button', { class: 'btn walk-btn walk-exit', onclick: () => hd.exit(), 'aria-label': 'Выйти из прогулки', 'data-tip': 'Выйти из прогулки (Esc)' }, icon('close', 16), h('span', {}, 'Выйти'));
+    const home = h('button', { class: 'btn walk-btn walk-home', onclick: () => hd.respawn(), 'aria-label': 'В точку появления', 'data-tip': 'Вернуться в точку появления (R)' }, icon('pin', 16), h('span', {}, 'В начало'));
     this.prompt = h('button', { class: 'walk-prompt', hidden: true, onclick: () => hd.action() });
     this.status = h('div', { class: 'walk-status' });
-    const children = [h('div', { class: 'walk-top' }, this.status, h('div', { class: 'walk-top-btns' }, this.ceilBtn, this.camBtn, exit)), this.prompt];
+    const children = [h('div', { class: 'walk-top' }, this.status, h('div', { class: 'walk-top-btns' }, home, this.ceilBtn, this.camBtn, exit)), this.prompt];
     if (touch) {
       children.push(this._joystick());
       const ab = (name, ic, label, fn, cls = '') => h('button', { class: `walk-act ${cls}`, 'data-act': name, 'aria-label': label, onpointerdown: (e) => (e.stopPropagation(), fn()) }, icon(ic, 22), h('span', {}, label));
@@ -49,6 +50,7 @@ export class WalkHUD {
         ['C', 'сесть'],
         ['Z', 'лечь'],
         ['V', 'вид из глаз'],
+        ['R', 'в точку появления'],
         ['мышь', 'тянуть — осмотреться, клик — выбрать'],
         ['колесо', 'ближе / дальше'],
         ['Esc', 'выйти'],

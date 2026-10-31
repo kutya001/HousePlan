@@ -6,6 +6,7 @@ import { EventBus } from '../core/EventBus.js';
 import { Store } from '../core/Store.js';
 import { AppState } from './AppState.js';
 import { Commands } from './commands.js';
+import { ProjectChecks } from './checks.js';
 import { FileActions } from './fileActions.js';
 import { setupShortcuts } from './shortcuts.js';
 import { buildContextItems, contextTitle } from './contextActions.js';
@@ -41,6 +42,7 @@ export class App {
     this.store = new Store(this.bus, loadSavedProject() || createEmptyProject());
     this.state = new AppState(this.bus, this.store);
     this.commands = new Commands(this);
+    this.checks = new ProjectChecks(this);
     this.file = new FileActions(this);
     this.toast = createToaster($('toasts'));
     this.ui = {};
@@ -82,6 +84,7 @@ export class App {
     this.pwa = setupPWA(this);
     this._setupFileDrop();
     this.editor.setTool('select');
+    this.checks.run();
 
     this.bus.on('settings:changed', ({ key }) => {
       if (key === 'theme') this.applyTheme();

@@ -210,6 +210,18 @@
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
+.v3-split {
+  display: inline-flex;
+  align-items: center;
+}
+.v3-split .v3-btn:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.v3-btn.v3-more {
+  padding: 0 4px;
+  margin-left: 1px;
+  border-radius: 0 7px 7px 0;
+}
 .stage[data-view='split'] .v3-btn span:not(.icon) {
   display: none;
 }

@@ -36,6 +36,10 @@ export class CommandPalette {
     cmd('Вид: план и 3D', 'split', () => app.setViewMode('split'), 'Вид · 2');
     cmd('Вид: 3D', 'cube', () => app.setViewMode('3d'), 'Вид · 3');
     cmd('Прогулка манекеном 170 см', 'person', () => app.walk(), '3D');
+    cmd('Прогулка: появляться у входа на участке', 'home', () => app.state.setSetting('walkSpawn', 'entrance'), '3D');
+    cmd('Прогулка: появляться в доме, на активном этаже', 'room', () => app.state.setSetting('walkSpawn', 'inside'), '3D');
+    cmd('Проверить проект: пересечения, предметы в стенах, двери', 'shield', () => app.checks.open(), 'Проверка');
+    cmd('Исправить ошибки автоматически', 'wand', () => app.checks.fixAll(), 'Проверка');
     cmd('Тёмная тема', 'moon', () => app.state.setSetting('theme', 'dark'), 'Оформление');
     cmd('Светлая тема', 'sun', () => app.state.setSetting('theme', 'light'), 'Оформление');
     cmd('Настройки', 'settings', () => app.ui.settings.open(), 'Приложение');

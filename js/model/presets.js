@@ -51,7 +51,8 @@ class B {
     return addOpeningAt(this.p, wall, { x, y }, 'window', opts);
   }
   item(i, type, x, y, rotation = 0, opts = {}) {
-    this.p.items.push(createItem(this.lv(i), type, x, y, { rotation, ...opts }));
+    // предмет этажа — даже «садовый» (скамья в бане, машина в гараже) стоит на полу этажа
+    this.p.items.push(createItem(this.lv(i), type, x, y, { rotation, onLevel: true, ...opts }));
   }
   out(type, x, y, rotation = 0, opts = {}) {
     this.p.items.push(createItem(SITE_LEVEL, type, x, y, { rotation, ...opts }));
@@ -146,12 +147,12 @@ function house9() {
   // Кухня-гостиная
   b.item(0, 'kitchen_counter', -4.0, 1.4, 270);
   b.item(0, 'fridge', -3.95, 3.1, 270);
-  b.item(0, 'dining_table', -2.8, 1.4);
+  b.item(0, 'dining_table', -2.7, 2.0);
   for (const [x, y, r] of [
-    [-3.2, 0.72, 0],
-    [-2.4, 0.72, 0],
-    [-3.2, 2.08, 180],
-    [-2.4, 2.08, 180],
+    [-3.1, 1.32, 0],
+    [-2.3, 1.32, 0],
+    [-3.1, 2.68, 180],
+    [-2.3, 2.68, 180],
   ])
     b.item(0, 'chair', x, y, r);
   b.item(0, 'sofa', -1.0, 3.2, 270);
@@ -171,7 +172,7 @@ function house9() {
   // Детская
   b.item(0, 'bed_single', 3.3, -3.0, 90);
   b.item(0, 'desk', 2.3, -3.975);
-  b.item(0, 'office_chair', 2.3, -3.2, 180);
+  b.item(0, 'office_chair', 1.95, -3.25, 180);
   b.item(0, 'wardrobe', 1.86, -1.5, 270);
   // Прихожая
   b.item(0, 'wardrobe', 4.0, 1.5, 90, { w: 1.6 });
@@ -301,7 +302,7 @@ function lHouse() {
   b.room(0, 'Гостиная', R(0, -4, 6, 2), 'parquet');
   b.room(0, 'Кухня-столовая', R(-6, -4, 0, 2), 'tile');
   b.room(0, 'Спальня', R(-6, 2, 0, 7), 'parquet');
-  b.door(inner, 3, 2, { width: 1.0 });
+  b.door(inner, 4.9, 2, { width: 1.0 });
   b.arch(p1, 0, -1, { width: 1.4 });
   b.door(p2, -3, 2);
   b.win(top, 3, -4, { width: 2.0 });
@@ -331,7 +332,7 @@ function lHouse() {
 
   b.roof(0, 'gable', 0, -1, 12.4, 6.4, 0);
   b.roof(0, 'gable', -3, 3.0, 8.4, 6.4, 90);
-  landscape(b, { entrance: { x: 3, y: 2.2 } });
+  landscape(b, { entrance: { x: 4.9, y: 2.2 } });
   return b.p;
 }
 
@@ -378,7 +379,7 @@ function mansardHouse() {
   b.room(1, 'Холл', R(0, -5, 4, 0.5), 'laminate');
   b.door(bottom, 2.5, 5, { width: 1.0 });
   b.door(p1, 2.6, 0.5);
-  b.arch(p1, -2, 0.5, { width: 1.4 });
+  b.arch(p1, -3.3, 0.5, { width: 1.2 });
   b.win(bottom, -2, 5, { width: 1.8 });
   b.win(left, -4, 2.8);
   b.win(left, -4, -2.3);
@@ -404,7 +405,7 @@ function mansardHouse() {
   b.room(2, 'Спальня', R(-4, 0.5, 4, 5), 'parquet');
   b.room(2, 'Кабинет', R(-4, -5, 0, 0.5), 'laminate');
   b.room(2, 'Холл', R(0, -5, 4, 0.5), 'laminate');
-  b.door(p2, 0.9, 0.5);
+  b.door(p2, 2.9, 0.5);
   b.door(b.p.walls.at(-1), 0, -4.3, { width: 0.8 });
   b.win(aBottom, 0, 5, { width: 1.6, height: 1.5, sill: 0.8 });
   b.win(aTop, -2, -5, { width: 1.0, height: 1.3, sill: 0.9 });
@@ -459,7 +460,7 @@ function garage() {
   b.door(right, 2, -1.8, { width: 0.9 });
   b.win(left, -2, -1, { width: 0.8, height: 0.6, sill: 1.4, style: 'single' });
   void top;
-  b.out('car', 0, 0.2, 90);
+  b.item(0, 'car', 0, 0.2, 90);
   b.item(0, 'bookshelf', -1.65, -2.0, 270, { w: 1.6, d: 0.45 });
   b.roof(0, 'shed', 0, 0, 6.3, 4.3, 90, { pitch: 10, overhang: 0.3 });
   b.site(16, 25);

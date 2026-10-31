@@ -12,9 +12,9 @@ import { CollisionWorld } from './CollisionWorld.js';
 import { FollowCamera } from './FollowCamera.js';
 import { WalkHUD } from './WalkHUD.js';
 import { findSpot } from './seats.js';
+import { entranceSpawn, insideSpawn, customSpawn } from './spawn.js';
 import { computeWallGeometry, pointOnWall } from '../../geometry/wallGeometry.js';
 import { levelElevation, SITE_LEVEL, getLevel, groundLevel } from '../../model/project.js';
-import { polygonLabelPoint, polygonArea, pointInPolygon } from '../../core/geometry.js';
 
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 
@@ -43,26 +43,24 @@ export class CharacterMode {
     return this.active && this.ceilingHidden && !this.firstPerson;
   }
 
+  /**
+   * @param at — точка плана на активном этаже («Пройтись отсюда»);
+   *             без неё — точка появления из настроек (по умолчанию — у входа на участке)
+   */
   start({ at = null } = {}) {
     if (this.active) this.stop(true);
     const { app } = this;
-    const { project, state } = app;
     this.world = this._buildWorld();
     this.ctrl = new CharacterController(this.world);
     this.model = new Mannequin();
     this.anim = new Animator();
     this.view.scene.add(this.model.root);
     this.cam = new FollowCamera(this.view.camera);
-
-    const p = at || this._defaultStart();
-    const base = levelElevation(project, state.activeLevelId);
-    this.ctrl.place(p.x, p.y, base + 0.3);
-    // смотрим туда же, куда смотрела камера
+    // смотрим туда же, куда смотрела камера (точка у входа повернёт лицом к дому)
     const dir = new THREE.Vector3();
     this.view.camera.getWorldDirection(dir);
     this.cam.yaw = Math.atan2(dir.x, dir.z);
-    this.ctrl.yaw = this.cam.yaw;
-    this.levelId = this.world.levelAt(this.ctrl.pos.y);
+    this._placeAt(at ? { ...at, levelId: app.state.activeLevelId } : this.spawnPoint());
 
     const touch = app.state.coarse;
     this.hud = new WalkHUD(this.view.container.parentElement, {
@@ -75,6 +73,7 @@ export class CharacterMode {
         jump: () => (this.jumpQueued = true),
         sit: () => this.sit(),
         lie: () => this.lie(),
+        respawn: () => this.respawn(),
         run: (on) => (this.runToggle = on),
         move: (x, y) => (this.joy = { x, y }),
       },
@@ -93,7 +92,7 @@ export class CharacterMode {
     this.keyFocus = true;
     window.addEventListener('pointerdown', this._onFocus, true);
     this.active = true;
-    this.view.invalidate(0);
+    this.view.applyCutaway();
     this._emitPosition(true);
   }
 
@@ -122,24 +121,48 @@ export class CharacterMode {
   /** Переставить манекена (например, из меню плана «Пройтись отсюда»). */
   teleport(at) {
     if (!this.active || !at) return;
-    const base = levelElevation(this.app.project, this.app.state.activeLevelId);
-    this.ctrl.place(at.x, at.y, base + 0.3);
-    this.levelId = this.world.levelAt(this.ctrl.pos.y);
-    this.cam.pivot.set(0, 0, 0);
-    this._emitPosition(true);
+    this._placeAt({ ...at, levelId: this.app.state.activeLevelId });
   }
 
-  _defaultStart() {
+  /** Вернуться в точку появления (кнопка «В начало»). */
+  respawn() {
+    if (!this.active) return;
+    if (this.ctrl.mode !== 'move') this.ctrl.mode = 'move';
+    this._placeAt(this.spawnPoint());
+  }
+
+  /** Где появиться: по настройке «Точка появления» — у входа, в доме или в своей точке. */
+  spawnPoint() {
     const { project, state } = this.app;
-    const t = this.view.controls.target;
-    const rooms = project.rooms.filter((r) => r.levelId === state.activeLevelId);
-    const here = rooms.find((r) => pointInPolygon({ x: t.x, y: t.z }, r.points));
-    if (here) return polygonLabelPoint(here.points);
-    if (rooms.length) {
-      const big = rooms.reduce((a, b) => (polygonArea(a.points) >= polygonArea(b.points) ? a : b));
-      return polygonLabelPoint(big.points);
+    const mode = state.settings.walkSpawn || 'entrance';
+    if (mode === 'point') {
+      const s = customSpawn(project);
+      if (s) return s.levelId === SITE_LEVEL ? { x: s.x, y: s.y, levelId: groundLevel(project).id, onSite: true } : { ...s };
     }
-    return { x: t.x, y: t.z };
+    if (mode !== 'inside') {
+      const e = entranceSpawn(project, this.world);
+      if (e) return { ...e, onSite: true };
+    }
+    const t = this.view.controls.target;
+    return insideSpawn(project, state.activeLevelId, { x: t.x, y: t.z });
+  }
+
+  _placeAt(sp) {
+    const { project, state } = this.app;
+    const maxY = sp.onSite ? 0.4 : levelElevation(project, sp.levelId || state.activeLevelId) + 0.3;
+    this.ctrl.place(sp.x, sp.y, maxY);
+    if (sp.yaw != null) {
+      this.cam.yaw = sp.yaw;
+      this.cam.pitch = 0.32;
+    }
+    this.ctrl.yaw = this.cam.yaw;
+    this.cam.pivot.set(0, 0, 0);
+    this.cam.curDist = this.cam.dist;
+    const c = this.ctrl.pos;
+    this.levelId = this.world.levelAt(c.y, c.x, c.z);
+    this._lvlHold = null;
+    if (this.levelId && this.levelId !== state.activeLevelId) state.setLevel(this.levelId);
+    if (this.active) this._emitPosition(true);
   }
 
   _buildWorld() {
@@ -210,7 +233,7 @@ export class CharacterMode {
       this.keys.add(c);
       return true;
     }
-    if (ev.repeat && ['Space', 'KeyE', 'KeyC', 'KeyZ', 'KeyV'].includes(c)) return true;
+    if (ev.repeat && ['Space', 'KeyE', 'KeyC', 'KeyZ', 'KeyV', 'KeyR'].includes(c)) return true;
     switch (c) {
       case 'Space':
         this.jumpQueued = true;
@@ -226,6 +249,9 @@ export class CharacterMode {
         return true;
       case 'KeyV':
         this.toggleCamera();
+        return true;
+      case 'KeyR':
+        this.respawn();
         return true;
       case 'Escape':
         this.stop();
@@ -280,14 +306,14 @@ export class CharacterMode {
       this.model.setFirstPerson(fp);
       this.hud.setCamera(fp);
       this.hud.setCeiling(this.ceilingHidden, !fp);
-      if (this.ceilingHidden) this.view.invalidate(0);
+      if (this.ceilingHidden) this.view.applyCutaway();
     }
   }
 
   toggleCeiling() {
     this.ceilingHidden = !this.ceilingHidden;
     this.hud.setCeiling(this.ceilingHidden, !this.firstPerson);
-    this.view.invalidate(0);
+    this.view.applyCutaway();
   }
 
   /** Что можно сделать рядом: дверь, сиденье, кровать. */
@@ -403,22 +429,29 @@ export class CharacterMode {
     this._eye.x += fwd.x * 0.06;
     this._eye.z += fwd.z * 0.06;
     this.cam.update(dt, this._head, this._eye, this.view.root);
-    // камера вплотную — манекен полупрозрачный, чтобы не загораживал вид
-    this.model.setGhost(!this.firstPerson && this.cam.curDist < 0.9);
+    // камера вплотную — манекен полупрозрачный, чтобы не загораживал вид (с запасом, без мигания)
+    const ghost = !this.firstPerson && (this._ghost ? this.cam.curDist < 1.05 : this.cam.curDist < 0.85);
+    if (ghost !== this._ghost) this.model.setGhost((this._ghost = ghost));
 
-    // этаж под ногами — активный на плане
-    const lvl = this.world.levelAt(c.pos.y);
+    // этаж под ногами — активный на плане; смена — только если держится ~0,15 с,
+    // чтобы на границе (порог, верх лестницы) этажи не переключались туда-сюда
+    const lvl = this.world.levelAt(c.pos.y, c.pos.x, c.pos.z);
     if (lvl && lvl !== this.levelId && c.grounded) {
-      this.levelId = lvl;
-      if (lvl !== this.app.state.activeLevelId) this.app.state.setLevel(lvl);
-    }
+      this._lvlHold = this._lvlHold?.id === lvl ? { id: lvl, t: this._lvlHold.t + dt } : { id: lvl, t: 0 };
+      if (this._lvlHold.t >= 0.15) {
+        this.levelId = lvl;
+        this._lvlHold = null;
+        if (lvl !== this.app.state.activeLevelId) this.app.state.setLevel(lvl);
+      }
+    } else this._lvlHold = null;
 
     // подсказки
     const n = this._nearby();
     this.hud.setPrompt(n);
     const lv = getLevel(this.app.project, this.levelId);
+    const place = c.grounded && this.world.outsideAt(c.pos.x, c.pos.z, c.pos.y) ? 'Участок' : lv?.name || 'Участок';
     const what = { stand: 'стоит', walk: 'идёт', run: 'бежит', climb: 'шагает по ступеням', air: 'в прыжке', mantle: 'залезает', sit: 'сидит', sitFloor: 'сидит на полу', lie: 'лежит', lieFloor: 'лежит на полу' }[st.mode] || '';
-    this.hud.setStatus(this.keyFocus || this.app.state.coarse ? `${lv?.name || 'Участок'} · ${what}` : 'Клавиши у плана · клик по 3D — идти');
+    this.hud.setStatus(this.keyFocus || this.app.state.coarse ? `${place} · ${what}` : 'Клавиши у плана · клик по 3D — идти');
     this._emitPosition();
   }
 

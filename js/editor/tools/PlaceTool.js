@@ -12,7 +12,7 @@ import { alignRect, drawAlign } from '../smartSnap.js';
 import { drawItemSymbol } from '../render/symbols2d.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { stairRise } from '../render/drawStairs.js';
-import { normalizeDeg } from '../../core/geometry.js';
+import { normalizeDeg, pointInPolygon } from '../../core/geometry.js';
 import { levelAbove, groundLevel, isRoofTerrace } from '../../model/project.js';
 
 export class PlaceTool extends Tool {
@@ -70,7 +70,10 @@ export class PlaceTool extends Tool {
     if (this.what === 'stair') {
       obj = createStair(this.levelId, p.x, p.y, { shape: this.settings.shape, rotation: this.settings.rotation });
     } else {
-      obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation, onLevel: isRoofTerrace(this.project, this.levelId) });
+      // садовый объект внутри комнаты (машина в гараже, скамья в бане) или на крыше-террасе
+      // стоит на полу этажа, снаружи — на земле участка
+      const inRoom = this.project.rooms.some((r) => r.levelId === this.levelId && pointInPolygon(p, r.points));
+      obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation, onLevel: inRoom || isRoofTerrace(this.project, this.levelId) });
       if (catalogItem(obj.type)?.wallSnap && !e.alt) {
         const sn = snapToWall(this.editor, p, obj.d, obj.w);
         if (sn) {

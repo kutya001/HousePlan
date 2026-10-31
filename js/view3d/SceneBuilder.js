@@ -11,14 +11,14 @@ import { buildItem } from './builders/buildItems.js';
 import { edgeMaterial } from './materials.js';
 
 /**
+ * Строим все этажи и крыши; «разрез» по активному этажу — это просто видимость
+ * групп (applyCutaway): переключение этажей мгновенное, без пересборки сцены.
  * @param project
  * @param opts { activeLevelId, cutaway, roofs, furniture, edges }
  */
 export function buildScene(project, opts) {
   const root = new THREE.Group();
   root.name = 'building';
-  const activeIdx = Math.max(0, levelIndex(project, opts.activeLevelId));
-  const maxIdx = opts.cutaway ? activeIdx : project.levels.length - 1;
 
   root.add(buildSite(project));
   if (opts.furniture) {
@@ -27,7 +27,6 @@ export function buildScene(project, opts) {
 
   const ground = groundLevel(project);
   project.levels.forEach((level, i) => {
-    if (i > maxIdx) return;
     const base = levelElevation(project, level.id);
     const g = new THREE.Group();
     g.name = level.id;
@@ -35,15 +34,18 @@ export function buildScene(project, opts) {
     g.add(buildWalls(project, level.id, base, { plinth: i === 0, porch: level === ground }));
     g.add(buildStairs(project, level.id, base));
     if (opts.furniture) for (const it of project.items.filter((x) => x.levelId === level.id)) g.add(buildItem(it, base));
+    g.userData.levelIndex = i;
     root.add(g);
   });
 
   if (opts.roofs) {
     for (const roof of project.roofs) {
       const idx = levelIndex(project, roof.levelId);
-      if (idx < 0 || idx > maxIdx) continue;
-      if (opts.cutaway && idx >= activeIdx) continue;
-      root.add(buildRoof(project, roof));
+      if (idx < 0) continue;
+      const r = buildRoof(project, roof);
+      r.userData.levelIndex = idx;
+      r.userData.isRoof = true;
+      root.add(r);
     }
   }
 
@@ -61,7 +63,25 @@ export function buildScene(project, opts) {
       }
     });
   }
+  applyCutaway(root, project, opts.activeLevelId, opts.cutaway);
   return root;
+}
+
+/** Разрез: скрыть этажи выше активного, его крышу и всё, что над ним. */
+export function applyCutaway(root, project, activeLevelId, enabled) {
+  if (!root) return;
+  const active = Math.max(0, levelIndex(project, activeLevelId));
+  for (const ch of root.children) {
+    const i = ch.userData.levelIndex;
+    if (i == null) continue;
+    ch.visible = !enabled || (ch.userData.isRoof ? i < active : i <= active);
+  }
+}
+
+/** Виден ли объект (с учётом скрытых родителей) — лучи не должны задевать спрятанное. */
+export function isShown(obj) {
+  for (let o = obj; o; o = o.parent) if (!o.visible) return false;
+  return true;
 }
 
 export function disposeTree(obj) {

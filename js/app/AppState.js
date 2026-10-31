@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS = {
   shadows: true,
   furniture3d: true,
   theme: 'system', // light | dark | system
+  walkSpawn: 'entrance', // где появляется манекен: entrance | inside | point
+  checks: true, // подсвечивать на плане пересечения и другие ошибки
 };
 
 export class AppState {

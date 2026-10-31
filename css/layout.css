@@ -289,6 +289,30 @@ textarea {
   color: var(--danger);
 }
 
+.status-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  margin-right: 6px;
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.status-checks.bad {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.status-checks[hidden] {
+  display: none;
+}
+
 /* ── Адаптивность ───────────────────────────────────────────────────── */
 @media (max-height: 860px) {
   .rail-label {

@@ -29,6 +29,7 @@ export function buildContextItems(app, { hit, world }) {
   const rot = { label: 'Повернуть на 90°', icon: 'rotate', kbd: 'R', onClick: () => c.rotateSelection(90) };
   const sep = { separator: true };
   const walkHere = { label: 'Пройтись отсюда манекеном', icon: 'person', onClick: () => app.walk(world) };
+  const spawnHere = { label: 'Появляться здесь при прогулке', icon: 'pin', onClick: () => c.setSpawn(world) };
 
   if (!hit) {
     const sel = app.editor.tools.select;
@@ -40,6 +41,7 @@ export function buildContextItems(app, { hit, world }) {
       { label: 'Показать весь дом', icon: 'fit', kbd: 'Home', onClick: () => app.editor.fitToContent() },
       { label: 'Новая стена отсюда', icon: 'wall', onClick: () => app.editor.setTool('wall') },
       walkHere,
+      spawnHere,
     ];
   }
 
@@ -109,6 +111,7 @@ export function buildContextItems(app, { hit, world }) {
       return [
         { ...props, label: 'Переименовать и пол' },
         { ...walkHere, label: 'Пройтись здесь манекеном' },
+        spawnHere,
         sep,
         { label: 'Разделить пополам', icon: 'wall', onClick: () => c.splitRoom(hit.id, 'auto') },
         { label: 'Пополам вертикальной стеной', icon: 'wall', onClick: () => c.splitRoom(hit.id, 'vertical') },
@@ -117,9 +120,9 @@ export function buildContextItems(app, { hit, world }) {
         { ...del, label: 'Удалить пол комнаты' },
       ];
     case 'zone':
-      return [props, walkHere, sep, dup, del];
+      return [props, walkHere, spawnHere, sep, dup, del];
     case 'site':
-      return [{ ...props, label: 'Участок и забор' }, { label: 'Размер участка…', icon: 'site', onClick: () => app.ui.presets.open('site') }, walkHere];
+      return [{ ...props, label: 'Участок и забор' }, { label: 'Размер участка…', icon: 'site', onClick: () => app.ui.presets.open('site') }, walkHere, spawnHere];
     default:
       return [props, del];
   }

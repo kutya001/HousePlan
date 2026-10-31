@@ -298,6 +298,30 @@ export class Commands {
     return true;
   }
 
+  /** Точка появления манекена: здесь, на активном этаже (или на участке, если вне комнат первого этажа). */
+  setSpawn(point) {
+    if (!point) return;
+    const p = this.project;
+    const lvl = this.state.activeLevelId;
+    const ground = groundLevel(p)?.id === lvl;
+    const inRoom = p.rooms.some((r) => r.levelId === lvl && pointInPolygon(point, r.points));
+    const levelId = ground && !inRoom ? SITE_LEVEL : lvl;
+    this.store.commit((pr) => {
+      pr.site.spawn = { x: point.x, y: point.y, levelId };
+    });
+    this.state.setSetting('walkSpawn', 'point');
+    this.app.toast(levelId === SITE_LEVEL ? 'Манекен будет появляться здесь, на участке' : 'Манекен будет появляться здесь', 'info', this._undoAction());
+  }
+
+  clearSpawn() {
+    if (!this.project.site?.spawn) return;
+    this.store.commit((pr) => {
+      delete pr.site.spawn;
+    });
+    if (this.state.settings.walkSpawn === 'point') this.state.setSetting('walkSpawn', 'entrance');
+    this.app.toast('Своя точка появления убрана — манекен появится у входа', 'info', this._undoAction());
+  }
+
   loadProject(raw) {
     this._load(normalizeProject(raw), true);
   }

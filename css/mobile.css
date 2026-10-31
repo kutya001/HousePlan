@@ -401,6 +401,7 @@ input[type='checkbox'].switch:checked::after {
   pointer-events: auto;
 }
 .walk-status {
+  flex: 0 1 auto;
   padding: 6px 11px;
   border-radius: 999px;
   background: rgba(20, 27, 33, 0.72);
@@ -415,8 +416,20 @@ input[type='checkbox'].switch:checked::after {
 }
 .walk-top-btns {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* в режиме «План и 3D» панель узкая — у кнопок прогулки только значки */
+.stage[data-view='split'] .walk-btn span:not(.icon) {
+  display: none;
+}
+@media (min-width: 1700px) {
+  .stage[data-view='split'] .walk-btn span:not(.icon) {
+    display: inline;
+  }
 }
 .walk-btn {
   background: rgba(255, 255, 255, 0.92);
@@ -811,12 +824,20 @@ body.walking .view3d-bar {
     top: 10px;
   }
   .side-tabs {
-    padding: 4px 56px 0 12px;
+    padding: 4px 52px 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 0;
+  }
+  .side-tabs::-webkit-scrollbar {
+    display: none;
   }
   .side-tab {
+    flex: none;
     min-height: var(--tap);
-    padding: 8px 12px 10px;
+    padding: 8px 9px 10px;
     font-size: var(--fs-m);
+    white-space: nowrap;
   }
   .side-tab[data-tab='levels'] {
     display: inline-block;
@@ -972,6 +993,9 @@ body.walking .view3d-bar {
     height: 40px;
     min-width: 40px;
     justify-content: center;
+  }
+  .v3-btn.v3-more {
+    min-width: 30px;
   }
   .v3-btn span:not(.icon) {
     display: none;

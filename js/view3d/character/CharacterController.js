@@ -148,7 +148,7 @@ export class CharacterController {
     if (this.grounded) {
       const sup = this.world.supportAt(x, z, p.y + STEP_UP);
       if (sup.y >= p.y - STEP_DOWN) {
-        if (sup.y > p.y + 0.05 || sup.solid?.kind === 'stair') this.stairTime = 0.35;
+        if (sup.y > p.y + 0.05 || sup.solid?.kind === 'stair' || sup.solid?.kind === 'porch') this.stairTime = 0.35;
         p.y = sup.y;
         this.support = sup.solid;
         this.vy = 0;

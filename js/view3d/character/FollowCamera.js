@@ -5,10 +5,12 @@
  * Поворот — мышью или пальцем, колесо — ближе / дальше; вплотную — вид из глаз.
  */
 import * as THREE from 'three';
+import { isShown } from '../SceneBuilder.js';
 
 const MIN_DIST = 1.1;
 const MAX_DIST = 9;
-const SEE_THROUGH = new Set(['wall', 'opening', 'item']);
+const SEE_THROUGH = new Set(['wall', 'opening', 'item', 'stair']);
+const HOLD = 0.45; // сколько секунд помнить препятствие: камера не «качается» туда-сюда
 const fadeCache = new Map();
 
 function faded(material) {
@@ -38,6 +40,8 @@ export class FollowCamera {
     this._dir = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
     this._dir2 = new THREE.Vector3();
+    this._hold = null; // { d, t } — недавнее препятствие за спиной
+    this._ghost = false;
   }
 
   rotate(dx, dy) {
@@ -113,7 +117,7 @@ export class FollowCamera {
       const hits = this._ray.intersectObject(obstacles, true);
       for (const h of hits) {
         const m = h.object;
-        if (!m.isMesh || m.userData.character) continue;
+        if (!m.isMesh || m.userData.character || !isShown(m)) continue;
         let o = m;
         while (o && !o.userData.ref) o = o.parent;
         const kind = o?.userData.ref?.kind;
@@ -127,8 +131,16 @@ export class FollowCamera {
         break;
       }
     }
-    // приближаемся сразу (чтобы не заглянуть за стену), отдаляемся плавно
-    this.curDist = want < this.curDist ? want : this.curDist + (want - this.curDist) * Math.min(1, dt * 3);
+    // Препятствие помним недолго: если луч на миг «проскочил» мимо края перекрытия,
+    // камера не отъезжает и не прыгает обратно на следующем кадре.
+    if (want < this.dist - 1e-3) this._hold = { d: want, t: HOLD };
+    else if (this._hold) {
+      this._hold.t -= dt;
+      if (this._hold.t > 0) want = Math.min(want, this._hold.d);
+      else this._hold = null;
+    }
+    // к препятствию — сразу (чтобы не заглянуть за перекрытие), от него — плавно
+    this.curDist = want < this.curDist ? want : this.curDist + (want - this.curDist) * Math.min(1, dt * 2.5);
     cam.position.copy(piv).addScaledVector(dir, this.curDist);
     cam.lookAt(piv);
     // стены, закрывающие туловище и ноги, тоже делаем прозрачными
@@ -142,7 +154,7 @@ export class FollowCamera {
         this._ray.far = len - 0.15;
         for (const h of this._ray.intersectObject(obstacles, true)) {
           const m = h.object;
-          if (!m.isMesh) continue;
+          if (!m.isMesh || !isShown(m)) continue;
           let o = m;
           while (o && !o.userData.ref) o = o.parent;
           if (SEE_THROUGH.has(o?.userData.ref?.kind) && (!m.material?.transparent || m.material.userData.fadedFrom)) fade.add(m);

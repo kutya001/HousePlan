@@ -8,6 +8,7 @@ import { h, icon, clear } from './dom.js';
 import { openModal } from './feedback.js';
 import { buildAiPrompt } from '../io/aiPrompt.js';
 import { importProject, toExchange, summarize } from '../io/exchange.js';
+import { checkProject, summarizeIssues } from '../model/validate.js';
 import { download, safeName, saveProjectFile } from '../io/fileio.js';
 import { LEVEL_KINDS } from '../model/project.js';
 
@@ -53,6 +54,25 @@ async function copyText(text, fallbackEl) {
     }
     return false;
   }
+}
+
+/** Итог проверки импортируемого дома: предметы друг в друге, в стенах и т. п. */
+function checkReport(project) {
+  let issues = [];
+  try {
+    issues = checkProject(project);
+  } catch {
+    return null;
+  }
+  if (!issues.length) return h('p', { class: 'xch-ok' }, icon('shield', 16), 'Проверка: предметы и постройки не пересекаются, двери свободны');
+  const errors = issues.filter((i) => i.level === 'error');
+  const top = (errors.length ? errors : issues).slice(0, 4);
+  return h(
+    'div',
+    { class: errors.length ? 'xch-check bad' : 'xch-check' },
+    h('p', {}, icon('warn', 16), `Проверка: ${summarizeIssues(issues)}. После загрузки — вкладка «Проверка»: там можно показать и исправить.`),
+    h('ul', {}, top.map((i) => h('li', {}, i.title)), issues.length > top.length ? h('li', { class: 'muted' }, `и ещё ${issues.length - top.length}`) : null),
+  );
 }
 
 export class ExchangeDialog {
@@ -207,6 +227,7 @@ export class ExchangeDialog {
         ),
         s.outdoor || s.zones ? h('p', { class: 'muted small' }, `Участок: объектов ${s.outdoor}, зон ${s.zones}`) : null,
         parsed.warnings.length ? h('ul', { class: 'xch-warn' }, parsed.warnings.map((w) => h('li', {}, w))) : null,
+        checkReport(parsed.project),
       ];
       report.append(...parts.filter(Boolean));
     };

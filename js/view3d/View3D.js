@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CharacterMode } from './character/CharacterMode.js';
 import { DoorAnimator } from './doors.js';
-import { buildScene, disposeTree } from './SceneBuilder.js';
+import { buildScene, disposeTree, applyCutaway, isShown } from './SceneBuilder.js';
 import { highlighted } from './materials.js';
 import { levelElevation, getEntity, SITE_LEVEL, groundLevel } from '../model/project.js';
 
@@ -67,11 +67,11 @@ export class View3D {
     const bus = app.bus;
     // во время перетаскивания пересобираем реже — план остаётся отзывчивым
     bus.on('project:changed', ({ reason }) => this.invalidate(reason === 'gesture' ? 160 : 30));
-    bus.on('level:changed', () => {
-      if (app.state.settings.cutaway || this.character.cutaway) this.invalidate();
-    });
+    // разрез по этажу — видимость готовых групп, без пересборки
+    bus.on('level:changed', () => this.applyCutaway());
     bus.on('settings:changed', ({ key }) => {
-      if (['cutaway', 'roofs3d', 'edges', 'furniture3d'].includes(key)) this.invalidate();
+      if (key === 'cutaway') this.applyCutaway();
+      if (['roofs3d', 'edges', 'furniture3d'].includes(key)) this.invalidate();
       if (key === 'shadows') {
         this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
         this.invalidate();
@@ -109,6 +109,14 @@ export class View3D {
       clearTimeout(this._rebuildTimer);
       this._rebuildTimer = setTimeout(() => this.rebuild(), delay);
     }
+  }
+
+  /** Показать / скрыть этажи выше активного (кнопка «Разрез» и прогулка). */
+  applyCutaway() {
+    if (!this.root) return;
+    const s = this.app.state;
+    applyCutaway(this.root, this.app.project, s.activeLevelId, s.settings.cutaway || this.character.cutaway);
+    this.character.cam?.resetFade();
   }
 
   rebuild() {
@@ -294,6 +302,7 @@ export class View3D {
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
     for (const h of ray.intersectObject(this.root, true)) {
+      if (!isShown(h.object)) continue;
       let o = h.object;
       while (o && !o.userData.ref) o = o.parent;
       if (o) return o.userData.ref;

@@ -39,3 +39,36 @@ export function drawCharacter(ctx, r, ch) {
   ctx.restore();
   r.label(ctx, { x: ch.x, y: ch.y - Math.max(0.45, r.px(20)) }, '170 см', { size: 10, weight: 600, color: THEME.accent });
 }
+
+/** Своя точка появления манекена — булавка на плане (на её этаже или на участке у первого этажа). */
+export function drawSpawn(ctx, r) {
+  const s = r.project.site?.spawn;
+  if (!s) return;
+  if (s.levelId === 'site' ? !r.ground : s.levelId !== r.levelId) return;
+  const on = r.settings.walkSpawn === 'point';
+  const p = r.vp.toScreen(s);
+  r.screen(ctx, () => {
+    ctx.translate(p.x, p.y);
+    ctx.globalAlpha = on ? 1 : 0.55;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 6, 2.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-3, -7, -9, -11, -9, -18);
+    ctx.arc(0, -18, 9, Math.PI, 0);
+    ctx.bezierCurveTo(9, -11, 3, -7, 0, 0);
+    ctx.closePath();
+    ctx.fillStyle = on ? THEME.accent : THEME.text;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = THEME.paper;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -18, 3.4, 0, Math.PI * 2);
+    ctx.fillStyle = THEME.paper;
+    ctx.fill();
+  });
+  if (on) r.label(ctx, { x: s.x, y: s.y }, 'Старт прогулки', { size: 10, weight: 600, color: THEME.accent, baseline: 'top', bg: null });
+}

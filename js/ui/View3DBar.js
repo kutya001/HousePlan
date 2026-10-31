@@ -1,5 +1,7 @@
 /** Кнопки поверх 3D-вида: камера, прогулка, разрез по этажу, слои. */
 import { h, icon } from './dom.js';
+import { openMenu } from './ContextMenu.js';
+import { SPAWN_MODES } from '../model/defaults.js';
 
 const TOGGLES = [
   ['cutaway', 'cut', 'Разрез', 'Скрыть этажи выше активного и его крышу'],
@@ -13,7 +15,12 @@ export class View3DBar {
   constructor(app, root) {
     this.app = app;
     const btn = (ic, label, fn, tip) => h('button', { class: 'v3-btn', 'data-tip': tip || label, 'aria-label': label, onclick: fn }, icon(ic, 18), h('span', {}, label));
-    this.walkBtn = btn('person', 'Прогулка', () => this._walk(), 'Пройтись по дому манекеном 170 см: ходить, бегать, прыгать, подниматься по лестнице, садиться, открывать двери');
+    this.walkBtn = btn('person', 'Прогулка', () => this._walk(), 'Пройтись манекеном 170 см: появится у входа на участке, можно войти в дом, подняться по лестнице, сесть, открыть двери');
+    this.spawnBtn = h(
+      'button',
+      { class: 'v3-btn v3-more', 'aria-label': 'Где появиться манекену', 'data-tip': 'Где появиться манекену', onclick: () => this._spawnMenu() },
+      icon('chevronDown', 16),
+    );
     this.toggles = TOGGLES.map(([key, ic, label, tip]) => {
       const b = btn(ic, label, () => app.state.setSetting(key, !app.state.settings[key]), tip);
       b.classList.add('toggle');
@@ -26,7 +33,7 @@ export class View3DBar {
         { class: 'v3-group' },
         btn('fit', 'Весь дом', () => app.view3d?.frame(), 'Показать весь дом (двойной клик — к выделенному)'),
         btn('top', 'Сверху', () => app.view3d?.topView()),
-        this.walkBtn,
+        h('div', { class: 'v3-split' }, this.walkBtn, this.spawnBtn),
       ),
       h('div', { class: 'v3-group' }, this.toggles),
       h('div', { class: 'v3-group' }, btn('image', 'Снимок', () => app.file.export3DPNG(), 'Сохранить картинку 3D-вида')),
@@ -49,6 +56,36 @@ export class View3DBar {
 
   _walk() {
     this.app.walk();
+  }
+
+  /** Выбор точки появления манекена. */
+  _spawnMenu() {
+    const { app } = this;
+    const cur = app.state.settings.walkSpawn || 'entrance';
+    const hasPoint = !!app.project.site?.spawn;
+    const icons = { entrance: 'home', inside: 'room', point: 'pin' };
+    openMenu(app, {
+      anchor: this.spawnBtn,
+      title: 'Где появиться манекену',
+      sheet: app.state.isPhone,
+      items: [
+        ...SPAWN_MODES.map(([id, label]) => ({
+          label: id === 'point' && !hasPoint ? `${label} — не отмечена` : label,
+          icon: icons[id],
+          active: cur === id,
+          onClick: () => {
+            if (id === 'point' && !hasPoint) {
+              app.toast('На плане нажмите правой кнопкой (на телефоне — долгим нажатием) и выберите «Появляться здесь»', 'info');
+              return;
+            }
+            app.state.setSetting('walkSpawn', id);
+            if (app.view3d?.walking) app.view3d.character.respawn();
+          },
+        })),
+        { separator: true },
+        { label: 'Начать прогулку', icon: 'person', onClick: () => this._walk() },
+      ],
+    });
   }
 
   sync() {

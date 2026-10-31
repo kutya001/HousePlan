@@ -14,6 +14,7 @@ export class StatusBar {
     this.hint = h('div', { class: 'status-hint', 'aria-live': 'polite' });
     this.coords = h('div', { class: 'status-coords' }, 'x —  y —');
     this.saved = h('div', { class: 'status-saved' });
+    this.checks = h('button', { class: 'status-checks', hidden: true, 'data-tip': 'Проверка проекта: что стоит друг в друге, в стенах, загораживает двери', onclick: () => app.checks.open() });
     this.toggles = TOGGLES.map(([key, ic, label, tip]) =>
       h(
         'button',
@@ -28,7 +29,7 @@ export class StatusBar {
         h('span', {}, label),
       ),
     );
-    root.append(this.hint, h('div', { class: 'status-right' }, this.coords, ...this.toggles, this.saved));
+    root.append(this.hint, h('div', { class: 'status-right' }, this.checks, this.coords, ...this.toggles, this.saved));
 
     this.zoomLabel = h('button', { class: 'zoom-label', 'data-tip': 'Показать весь дом · Home', onclick: () => app.editor.fitToContent() }, '100%');
     zoomRoot.append(
@@ -56,6 +57,12 @@ export class StatusBar {
       this.saved.classList.toggle('error', !ok);
       this.saved.classList.add('flash');
       setTimeout(() => this.saved.classList.remove('flash'), 900);
+    });
+    app.bus.on('checks:changed', ({ issues }) => {
+      const e = issues.filter((i) => i.level === 'error').length;
+      this.checks.hidden = !issues.length;
+      this.checks.classList.toggle('bad', e > 0);
+      this.checks.replaceChildren(icon('warn', 16), h('span', {}, app.checks.summary));
     });
     this._syncZoom();
   }

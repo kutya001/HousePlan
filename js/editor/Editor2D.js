@@ -45,7 +45,7 @@ export class Editor2D {
       this._geomCache.clear();
       this.requestRender();
     });
-    for (const evt of ['selection:changed', 'level:changed', 'settings:changed']) bus.on(evt, () => this.requestRender());
+    for (const evt of ['selection:changed', 'level:changed', 'settings:changed', 'checks:changed']) bus.on(evt, () => this.requestRender());
     // манекен на плане во время прогулки
     this.character = null;
     bus.on('character:moved', (ch) => {
@@ -145,6 +145,16 @@ export class Editor2D {
     const pad = 2;
     this.viewport.fit({ minX: bb.minX - pad, minY: bb.minY - pad, maxX: bb.maxX + pad, maxY: bb.maxY + pad }, 48);
     this.requestRender();
+  }
+
+  /** Показать точку плана по центру и приблизить, если план слишком мелкий. */
+  centerOn(p, minScale = 45) {
+    const vp = this.viewport;
+    vp.cx = p.x;
+    vp.cy = p.y;
+    if (vp.scale < minScale) vp.scale = minScale;
+    this.requestRender();
+    this.app.bus.emit('zoom:changed', { scale: vp.scale });
   }
 
   zoomBy(factor) {

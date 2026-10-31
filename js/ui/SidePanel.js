@@ -7,10 +7,12 @@ import { h, icon } from './dom.js';
 import { LevelsPanel } from './LevelsPanel.js';
 import { PropertiesPanel } from './PropertiesPanel.js';
 import { CatalogPanel } from './CatalogPanel.js';
+import { ChecksPanel } from './ChecksPanel.js';
 
 const TABS = [
   ['properties', 'Свойства'],
   ['catalog', 'Каталог'],
+  ['checks', 'Проверка'],
   ['levels', 'Этажи'],
 ];
 
@@ -23,13 +25,15 @@ export class SidePanel {
     const tabs = h('div', { class: 'side-tabs', role: 'tablist' });
     const props = h('section', { class: 'side-body', role: 'tabpanel', id: 'tab-properties' });
     const catalog = h('section', { class: 'side-body', role: 'tabpanel', id: 'tab-catalog', hidden: true });
-    this.panels = { properties: props, catalog };
+    const checks = h('section', { class: 'side-body', role: 'tabpanel', id: 'tab-checks', hidden: true });
+    this.panels = { properties: props, catalog, checks };
     this.tabBtns = {};
     for (const [id, label] of TABS) {
       const b = h(
         'button',
         { class: 'side-tab', role: 'tab', dataset: { tab: id }, 'aria-controls': `tab-${id}`, onclick: () => this.showTab(id) },
         label,
+        id === 'checks' ? (this.badge = h('span', { class: 'tab-badge', hidden: true })) : null,
       );
       this.tabBtns[id] = b;
       tabs.append(b);
@@ -41,7 +45,7 @@ export class SidePanel {
       tabs,
       h('button', { class: 'icon-btn sheet-close', 'aria-label': 'Закрыть панель', onclick: () => this.close() }, icon('close')),
     );
-    root.append(levels, this.head, props, catalog);
+    root.append(levels, this.head, props, catalog, checks);
     // затемнение под выезжающей панелью (планшет)
     this.backdrop = h('div', { class: 'side-backdrop', onclick: () => this.close() });
     document.body.append(this.backdrop);
@@ -49,7 +53,15 @@ export class SidePanel {
     this.levels = new LevelsPanel(app, levels);
     this.properties = new PropertiesPanel(app, props);
     this.catalog = new CatalogPanel(app, catalog);
+    this.checks = new ChecksPanel(app, checks);
     this.showTab('properties');
+    app.bus.on('checks:changed', ({ issues }) => {
+      const e = issues.filter((i) => i.level === 'error').length;
+      this.badge.hidden = !issues.length;
+      this.badge.textContent = String(issues.length);
+      this.badge.classList.toggle('warn', !e);
+      this.tabBtns.checks.setAttribute('aria-label', issues.length ? `Проверка: ${app.checks.summary}` : 'Проверка: ошибок нет');
+    });
     app.bus.on('selection:changed', ({ selection }) => {
       if (selection.length && app.state.toolId !== 'item' && this.tab === 'catalog') this.showTab('properties');
     });

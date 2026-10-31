@@ -1,4 +1,5 @@
 /** Настройки: тема, шаг привязки, что показывать на плане и в 3D. */
+import { SPAWN_MODES } from '../model/defaults.js';
 import { h, icon } from './dom.js';
 import { openModal } from './feedback.js';
 
@@ -21,6 +22,7 @@ const TOGGLES = [
     ['dims', 'Размерные линии'],
     ['lowerLevel', 'Показывать этаж ниже'],
     ['roofs2d', 'Контуры крыш'],
+    ['checks', 'Подсвечивать ошибки: предметы друг в друге, в стенах, загороженные двери'],
   ]],
   ['3D', [
     ['shadows', 'Тени (нагружает слабые телефоны)'],
@@ -89,6 +91,16 @@ export class SettingsDialog {
         {},
         h('h3', {}, 'Шаг привязки к сетке'),
         seg(STEPS, st.gridStep, (v) => app.state.setSetting('gridStep', Number(v))),
+      ),
+      h(
+        'section',
+        {},
+        h('h3', {}, 'Прогулка: где появляется манекен'),
+        seg(
+          SPAWN_MODES.map(([v, l]) => [v, l]),
+          st.walkSpawn || 'entrance',
+          (v) => app.state.setSetting('walkSpawn', v),
+        ),
       ),
       ...TOGGLES.map(([title, rows]) => h('section', {}, h('h3', {}, title), ...rows.map(([k, l]) => toggle(k, l)))),
       h(
