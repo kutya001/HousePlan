@@ -389,12 +389,12 @@ function addItem(project, levelId, it, k, warnings) {
   const x = num(it.x, 0) * k;
   const y = num(it.y, 0) * k;
   if (!c) warnings.push(`Предмета «${it.type ?? it.name}» нет в каталоге — поставлен блок`);
-  const item = createItem(levelId, c ? c.type : 'box', x, y, { rotation: num(it.rotation, 0) });
+  // в furniture этажа предмет остаётся на этаже (беседка на крыше-террасе), в outdoor — на участке
+  const item = createItem(levelId, c ? c.type : 'box', x, y, { rotation: num(it.rotation, 0), onLevel: levelId !== SITE_LEVEL });
   if (it.w) item.w = clamp(num(it.w, item.w) * k, 0.05, 30);
   if (it.d) item.d = clamp(num(it.d, item.d) * k, 0.05, 30);
   if (it.h) item.h = clamp(num(it.h, item.h) * k, 0.01, 15);
   if (it.elevation) item.elevation = num(it.elevation, 0) * k;
-  if (levelId === SITE_LEVEL || c?.outdoor) item.levelId = c?.outdoor || levelId === SITE_LEVEL ? SITE_LEVEL : levelId;
   project.items.push(item);
 }
 

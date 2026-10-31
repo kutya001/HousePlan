@@ -13,7 +13,7 @@ import { drawItemSymbol } from '../render/symbols2d.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { stairRise } from '../render/drawStairs.js';
 import { normalizeDeg } from '../../core/geometry.js';
-import { levelAbove, groundLevel } from '../../model/project.js';
+import { levelAbove, groundLevel, isRoofTerrace } from '../../model/project.js';
 
 export class PlaceTool extends Tool {
   constructor(editor, what) {
@@ -42,9 +42,9 @@ export class PlaceTool extends Tool {
       const c = catalogItem(this.settings.type);
       this.name = c ? c.name : 'Мебель';
       const ground = groundLevel(this.project)?.id;
-      if (c?.outdoor && ground && this.levelId !== ground) {
+      if (c?.outdoor && ground && this.levelId !== ground && !isRoofTerrace(this.project, this.levelId)) {
         this.state.setLevel(ground);
-        this.toast('Объекты участка ставятся на землю — переключено на 1 этаж');
+        this.toast('Объекты участка ставятся на землю — переключено на первый этаж');
       }
       this.app.bus.emit('tool:options-refresh');
     }
@@ -70,7 +70,7 @@ export class PlaceTool extends Tool {
     if (this.what === 'stair') {
       obj = createStair(this.levelId, p.x, p.y, { shape: this.settings.shape, rotation: this.settings.rotation });
     } else {
-      obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation });
+      obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation, onLevel: isRoofTerrace(this.project, this.levelId) });
       if (catalogItem(obj.type)?.wallSnap && !e.alt) {
         const sn = snapToWall(this.editor, p, obj.d, obj.w);
         if (sn) {

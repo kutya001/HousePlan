@@ -170,6 +170,18 @@ export function wallHeight(project, wall) {
   return levelWallHeight(level);
 }
 
+/**
+ * Открытая терраса на крыше: самый верхний надземный этаж без своей крыши, у которого
+ * уже есть пол. Туда можно ставить беседку, грядки, мангал — они не «падают» на участок.
+ */
+export function isRoofTerrace(project, levelId) {
+  const levels = project.levels;
+  const top = levels[levels.length - 1];
+  if (!top || top.id !== levelId || levels.length < 2 || isBasement(top) || isAttic(top)) return false;
+  if (groundLevel(project)?.id === levelId) return false;
+  return project.rooms.some((r) => r.levelId === levelId);
+}
+
 /** Отметка, на которой лежит крыша: верх стен этажа, у мансарды — верх «колена». */
 export function levelTop(project, levelId) {
   const level = getLevel(project, levelId);

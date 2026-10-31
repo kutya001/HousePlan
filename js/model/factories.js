@@ -75,7 +75,8 @@ export function createItem(levelId, type, x, y, opts = {}) {
   const c = catalogItem(type) || { w: 1, d: 1, h: 1, color: '#c9c3b8', name: type };
   return {
     id: uid('item'),
-    levelId: c.outdoor ? SITE_LEVEL : levelId,
+    // объекты сада — на землю участка, если их не ставят явно на этаж (терраса на крыше)
+    levelId: c.outdoor && !opts.onLevel ? SITE_LEVEL : levelId,
     type,
     x,
     y,
