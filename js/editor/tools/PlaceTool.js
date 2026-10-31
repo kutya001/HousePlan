@@ -13,7 +13,7 @@ import { drawItemSymbol } from '../render/symbols2d.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { stairRise } from '../render/drawStairs.js';
 import { normalizeDeg } from '../../core/geometry.js';
-import { levelAbove } from '../../model/project.js';
+import { levelAbove, groundLevel } from '../../model/project.js';
 
 export class PlaceTool extends Tool {
   constructor(editor, what) {
@@ -41,7 +41,7 @@ export class PlaceTool extends Tool {
     if (this.what === 'item') {
       const c = catalogItem(this.settings.type);
       this.name = c ? c.name : 'Мебель';
-      const ground = this.project.levels[0]?.id;
+      const ground = groundLevel(this.project)?.id;
       if (c?.outdoor && ground && this.levelId !== ground) {
         this.state.setLevel(ground);
         this.toast('Объекты участка ставятся на землю — переключено на 1 этаж');

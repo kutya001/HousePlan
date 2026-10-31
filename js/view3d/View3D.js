@@ -8,7 +8,7 @@ import { CharacterMode } from './character/CharacterMode.js';
 import { DoorAnimator } from './doors.js';
 import { buildScene, disposeTree } from './SceneBuilder.js';
 import { highlighted } from './materials.js';
-import { levelElevation, getEntity, SITE_LEVEL } from '../model/project.js';
+import { levelElevation, getEntity, SITE_LEVEL, groundLevel } from '../model/project.js';
 
 export class View3D {
   constructor(app, container) {
@@ -313,7 +313,7 @@ export class View3D {
       const e = getEntity(project, ref.kind, ref.id);
       let levelId = e?.levelId;
       if (ref.kind === 'opening') levelId = getEntity(project, 'wall', e?.wallId)?.levelId;
-      if (ref.kind === 'zone' || levelId === SITE_LEVEL) levelId = project.levels[0].id;
+      if (ref.kind === 'zone' || levelId === SITE_LEVEL) levelId = groundLevel(project).id;
       // во время прогулки этаж задаёт манекен — не переключаем
       if (levelId && levelId !== state.activeLevelId && !this.walking) state.setLevel(levelId);
       state.select(ref, ev.shiftKey);

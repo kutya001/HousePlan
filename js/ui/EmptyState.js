@@ -24,8 +24,9 @@ export class EmptyState {
     const actions = [
       ['box', 'Коробка, 1 этаж', 'Протяните прямоугольник на плане', box(1, 'none')],
       ['box2', 'Коробка, 2 этажа', 'Сразу два этажа и двускатная крыша', box(2, 'gable')],
-      ['presets', 'Готовый дом', 'Пять планировок с мебелью и участком', () => app.ui.presets.open()],
+      ['presets', 'Готовый дом', 'Шесть планировок с мебелью и участком', () => app.ui.presets.open()],
       ['wall', 'Нарисовать стены', 'Точка за точкой, с привязками', () => app.editor.setTool('wall')],
+      ['spark', 'Построить с ИИ', 'Промпт для нейросети и импорт ответа', () => app.ui.exchange.open('ai')],
     ];
     clear(this.root);
     this.root.append(

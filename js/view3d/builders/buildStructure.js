@@ -6,7 +6,8 @@ import { COLORS, FLOOR_MATERIALS } from '../../model/defaults.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
-import { levelBelow, levelTop, getLevel, levelWallHeight } from '../../model/project.js';
+import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
+import { levelFootprints } from '../../geometry/roomDetect.js';
 
 export function stairRise3D(project, stair) {
   const lvl = getLevel(project, stair.levelId);
@@ -21,13 +22,20 @@ export function buildFloors(project, level, base, index) {
   if (below) {
     for (const s of project.stairs.filter((x) => x.levelId === below.id)) holes.push(stairLayout(s, stairRise3D(project, s)).outline);
   }
-  const y0 = index === 0 ? 0 : base - (below?.slab ?? 0.25);
+  // нижний этаж над землёй — пол на засыпке до земли; подвал — на бетонной плите
+  const y0 = index === 0 ? (base > 0.01 ? 0 : base - 0.1) : base - (below?.slab ?? 0.25);
   for (const room of project.rooms.filter((r) => r.levelId === level.id)) {
     const inner = holes.filter((h) => h.every((p) => pointInPolygon(p, room.points)));
     const geo = extrudePolygon(room.points, y0, base, inner);
     if (!geo) continue;
     const color = (FLOOR_MATERIALS[room.floor] || FLOOR_MATERIALS.laminate).color;
     group.add(mesh(geo, mat(color, { roughness: 0.7 }), { kind: 'room', id: room.id }, { cast: index > 0 }));
+  }
+  // дно котлована под подвалом — бетонная плита по пятну стен
+  if (isBasement(level)) {
+    const slabs = levelFootprints(project.walls.filter((w) => w.levelId === level.id)).map((fp) => extrudePolygon(fp, base - 0.35, base - 0.015));
+    const geo = mergeGeometries(slabs);
+    if (geo) group.add(mesh(geo, mat('#a29d95', { roughness: 0.95 }), null, { cast: false }));
   }
   return group;
 }
@@ -70,7 +78,9 @@ export function buildRoof(project, roof) {
     group.add(m);
   }
   const gab = [];
-  for (const poly of geo.gables) {
+  // у мансарды фронтоны — это её стены (срезанные скатами), отдельные треугольники не нужны
+  const gables = isAttic(getLevel(project, roof.levelId)) ? [] : geo.gables;
+  for (const poly of gables) {
     // толщина фронтона — внутрь крыши
     const a = poly[0];
     const b = poly[1];

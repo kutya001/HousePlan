@@ -7,6 +7,7 @@ import { pointInPolygon, polygonLabelPoint, polygonArea, bboxOf } from '../../co
 import { fmtArea, fmtSotki } from '../../core/format.js';
 import { SITE_PRESETS, siteRect } from '../../model/presets.js';
 import { withAlpha } from '../render/theme.js';
+import { groundLevel } from '../../model/project.js';
 
 const names = (dict) => Object.fromEntries(Object.entries(dict).map(([k, v]) => [k, v.name]));
 
@@ -122,10 +123,10 @@ export class ZoneTool extends PolygonTool {
   }
 
   activate() {
-    const ground = this.project.levels[0]?.id;
+    const ground = groundLevel(this.project)?.id;
     if (ground && this.levelId !== ground) {
       this.state.setLevel(ground);
-      this.toast('Ландшафт рисуется на уровне земли — переключено на 1 этаж');
+      this.toast('Ландшафт рисуется на уровне земли — переключено на первый этаж');
     }
   }
 

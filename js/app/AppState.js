@@ -2,7 +2,7 @@
  * Состояние интерфейса (не попадает в файл проекта и в историю):
  * активный этаж, выделение, инструмент, режим вида, настройки отображения.
  */
-import { getEntity, getLevel } from '../model/project.js';
+import { getEntity, getLevel, groundLevel } from '../model/project.js';
 import { currentLayout, isCoarse, watchLayout } from './responsive.js';
 
 const SETTINGS_KEY = 'houseplan.settings.v1';
@@ -25,7 +25,7 @@ export class AppState {
   constructor(bus, store) {
     this.bus = bus;
     this.store = store;
-    this.activeLevelId = store.project.levels[0].id;
+    this.activeLevelId = groundLevel(store.project).id;
     this.selection = [];
     this.hover = null;
     this.toolId = 'select';
@@ -57,7 +57,7 @@ export class AppState {
   }
 
   get level() {
-    return getLevel(this.project, this.activeLevelId) || this.project.levels[0];
+    return getLevel(this.project, this.activeLevelId) || groundLevel(this.project);
   }
 
   setLevel(levelId) {
@@ -125,7 +125,7 @@ export class AppState {
 
   _validate() {
     if (!getLevel(this.project, this.activeLevelId)) {
-      this.activeLevelId = this.project.levels[0].id;
+      this.activeLevelId = groundLevel(this.project).id;
       this.bus.emit('level:changed', { levelId: this.activeLevelId });
     }
     const before = this.selection.length;

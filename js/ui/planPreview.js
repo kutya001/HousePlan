@@ -1,6 +1,7 @@
 /** Миниатюра плана первого этажа (для карточек пресетов). */
 import { computeWallGeometry } from '../geometry/wallGeometry.js';
 import { bboxOf } from '../core/geometry.js';
+import { groundLevel } from '../model/project.js';
 import { FLOOR_MATERIALS } from '../model/defaults.js';
 import { THEME, floorFill } from '../editor/render/theme.js';
 
@@ -13,7 +14,7 @@ export function drawPlanPreview(canvas, project) {
   canvas.height = H * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  const lvl = project.levels[0].id;
+  const lvl = groundLevel(project).id;
   const walls = project.walls.filter((w) => w.levelId === lvl);
   if (!walls.length) return;
   const pts = walls.flatMap((w) => [

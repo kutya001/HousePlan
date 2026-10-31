@@ -122,6 +122,16 @@ export class CharacterController {
     const res = this.world.resolve(x, z, this.radius, lo, p.y + this.height - 0.05);
     x = res.x;
     z = res.z;
+    // под скатом мансарды, где не выпрямиться, не пройти (но выйти из низкого места можно)
+    if (this.grounded) {
+      const room = this.world.headroom(x, z, p.y);
+      if (room < this.height - 0.08 && room < this.world.headroom(p.x, p.z, p.y) - 1e-3) {
+        x = p.x;
+        z = p.z;
+        this.vel.x = 0;
+        this.vel.z = 0;
+      }
+    }
     for (const c of res.contacts) {
       if (c.kind === 'door' && mag > 0.2) ev.doorBump = c.doorId;
     }

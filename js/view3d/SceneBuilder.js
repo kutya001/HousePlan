@@ -3,7 +3,7 @@
  * для домов из сотен объектов это быстро и избавляет от рассинхронизации.
  */
 import * as THREE from 'three';
-import { levelElevation, levelIndex, SITE_LEVEL } from '../model/project.js';
+import { levelElevation, levelIndex, SITE_LEVEL, groundLevel } from '../model/project.js';
 import { buildSite } from './builders/buildSite.js';
 import { buildWalls } from './builders/buildWalls.js';
 import { buildFloors, buildStairs, buildRoof } from './builders/buildStructure.js';
@@ -25,13 +25,14 @@ export function buildScene(project, opts) {
     for (const it of project.items.filter((i) => i.levelId === SITE_LEVEL)) root.add(buildItem(it, 0));
   }
 
+  const ground = groundLevel(project);
   project.levels.forEach((level, i) => {
     if (i > maxIdx) return;
     const base = levelElevation(project, level.id);
     const g = new THREE.Group();
     g.name = level.id;
     g.add(buildFloors(project, level, base, i));
-    g.add(buildWalls(project, level.id, base, { ground: i === 0 }));
+    g.add(buildWalls(project, level.id, base, { plinth: i === 0, porch: level === ground }));
     g.add(buildStairs(project, level.id, base));
     if (opts.furniture) for (const it of project.items.filter((x) => x.levelId === level.id)) g.add(buildItem(it, base));
     root.add(g);

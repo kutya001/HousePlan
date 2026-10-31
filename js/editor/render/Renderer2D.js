@@ -4,6 +4,7 @@
  * подписи — в экранных, чтобы текст не масштабировался.
  */
 import { drawCharacter } from './drawCharacter.js';
+import { drawAtticLow } from './drawAttic.js';
 import { THEME, font } from './theme.js';
 import { drawGrid } from './drawGrid.js';
 import { drawSite, drawSiteItems } from './drawSite.js';
@@ -67,6 +68,7 @@ export class Renderer2D {
     drawSite(ctx, this);
     if (this.ground) drawSiteItems(ctx, this);
     drawRooms(ctx, this);
+    drawAtticLow(ctx, this);
     const below = levelBelow(this.project, levelId);
     if (below && this.settings.lowerLevel) drawLowerLevel(ctx, this, below.id);
     if (below) drawStairwellsFromBelow(ctx, this, below.id);

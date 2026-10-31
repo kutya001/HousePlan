@@ -335,6 +335,92 @@ function lHouse() {
   return b.p;
 }
 
+/** Дом с цокольным этажом и мансардой: три уровня, две лестницы, стены мансарды под скатами. */
+function mansardHouse() {
+  const b = new B('Дом 8×10 с мансардой и цоколем', { foundation: 1.2 });
+  // 0 — цокольный, 1 — первый этаж, 2 — мансарда
+  const [bTop, bRight, bBottom, bLeft] = b.loop(0, R(-4, -5, 4, 5));
+  const [top, right, bottom, left] = b.loop(1, R(-4, -5, 4, 5));
+  const [aTop, , aBottom] = b.loop(2, R(-4, -5, 4, 5));
+  const [basement, ground, attic] = b.p.levels;
+  Object.assign(basement, { name: 'Цокольный этаж', kind: 'basement', height: 2.4 });
+  ground.name = '1 этаж';
+  Object.assign(attic, { name: 'Мансарда', kind: 'attic', height: 2.5, kneeWall: 1.2 });
+  void ground;
+
+  // цокольный этаж: мастерская, котельная и кладовая; окна-продухи над землёй
+  const bw = b.wall(0, -4, 0.5, 4, 0.5);
+  b.wall(0, -0.5, -5, -0.5, 0.5);
+  b.room(0, 'Мастерская', R(-4, 0.5, 4, 5), 'stone');
+  b.room(0, 'Котельная', R(-4, -5, -0.5, 0.5), 'tile');
+  b.room(0, 'Холл', R(-0.5, -5, 4, 0.5), 'stone');
+  b.door(bw, 2.6, 0.5);
+  b.door(b.p.walls.at(-1), -0.5, -1.2);
+  for (const [w, x, y] of [
+    [bBottom, -2, 5],
+    [bBottom, 2, 5],
+    [bLeft, -4, -2.5],
+    [bRight, 4, 2.6],
+  ])
+    b.win(w, x, y, { width: 0.9, height: 0.55, sill: 1.6 });
+  void bTop;
+  b.item(0, 'boiler', -3.58, -2.5, 270);
+  b.item(0, 'washing_machine', -3.4, -4.5, 0);
+  b.item(0, 'box', 0, 4.4, 180, { w: 2.2, d: 0.7, h: 0.9, color: '#a77a52' });
+  b.item(0, 'bookshelf', -3.62, 2.5, 270);
+  b.stair(0, 'straight', 2.6, -2.2, 180);
+
+  // первый этаж: гостиная, кухня, холл с двумя лестницами
+  const p1 = b.wall(1, -4, 0.5, 4, 0.5);
+  b.wall(1, 0, -5, 0, 0.5);
+  b.room(1, 'Гостиная', R(-4, 0.5, 4, 5), 'parquet');
+  b.room(1, 'Кухня-столовая', R(-4, -5, 0, 0.5), 'tile');
+  b.room(1, 'Холл', R(0, -5, 4, 0.5), 'laminate');
+  b.door(bottom, 2.5, 5, { width: 1.0 });
+  b.door(p1, 2.6, 0.5);
+  b.arch(p1, -2, 0.5, { width: 1.4 });
+  b.win(bottom, -2, 5, { width: 1.8 });
+  b.win(left, -4, 2.8);
+  b.win(left, -4, -2.3);
+  b.win(top, -2, -5);
+  b.win(right, 4, -2.2, { width: 1.0 });
+  b.win(right, 4, 2.8);
+  b.item(1, 'sofa', -1.6, 4.27, 180);
+  b.item(1, 'coffee_table', -1.6, 3.0);
+  b.item(1, 'tv_stand', -1.6, 0.93);
+  b.item(1, 'armchair', 1.2, 3.2, 270);
+  b.item(1, 'kitchen_counter', -2.6, -4.5);
+  b.item(1, 'fridge', -0.75, -4.45);
+  b.item(1, 'dining_table', -2, -2);
+  b.item(1, 'chair', -2.5, -1.3, 180);
+  b.item(1, 'chair', -1.5, -1.3, 180);
+  b.item(1, 'chair', -2.5, -2.7, 0);
+  b.item(1, 'chair', -1.5, -2.7, 0);
+  b.stair(1, 'straight', 0.9, -2.2, 180);
+
+  // мансарда: спальня и кабинет, окна во фронтонах, двускатная крыша 40°
+  const p2 = b.wall(2, -4, 0.5, 4, 0.5);
+  b.wall(2, 0, -5, 0, 0.5);
+  b.room(2, 'Спальня', R(-4, 0.5, 4, 5), 'parquet');
+  b.room(2, 'Кабинет', R(-4, -5, 0, 0.5), 'laminate');
+  b.room(2, 'Холл', R(0, -5, 4, 0.5), 'laminate');
+  b.door(p2, 0.9, 0.5);
+  b.door(b.p.walls.at(-1), 0, -4.3, { width: 0.8 });
+  b.win(aBottom, 0, 5, { width: 1.6, height: 1.5, sill: 0.8 });
+  b.win(aTop, -2, -5, { width: 1.0, height: 1.3, sill: 0.9 });
+  b.win(aTop, 2.4, -5, { width: 0.8, height: 1.1, sill: 1.0 });
+  b.item(2, 'bed_double', 0, 1.62, 0);
+  b.item(2, 'nightstand', -1.25, 0.77, 0);
+  b.item(2, 'nightstand', 1.25, 0.77, 0);
+  b.item(2, 'wardrobe', -1.55, 4.5, 180, { h: 1.9 });
+  b.item(2, 'desk', -2, -4.47);
+  b.item(2, 'office_chair', -2, -3.7, 180);
+  b.roof(2, 'gable', 0, 0, 10.4, 8.4, 90, { pitch: 40, overhang: 0.5 });
+
+  landscape(b, { entrance: { x: 2.5, y: 7.5 }, front: 20 });
+  return b.p;
+}
+
 function banya() {
   const b = new B('Баня 6×4', { height: 2.3, foundation: 0.3 });
   const [top, right, bottom, left] = b.loop(0, R(-3, -2, 3, 2), { thickness: 0.2 });
@@ -407,6 +493,12 @@ export const HOUSE_PRESETS = [
   { id: 'house9', name: 'Дом 9×9', description: 'Одноэтажный: кухня-гостиная, две спальни, санузел, прихожая, участок 10 соток.', build: house9 },
   { id: 'house2', name: 'Двухэтажный 10×12', description: 'П-образная лестница, 4 спальни, вальмовая крыша, терраса.', build: house2floors },
   { id: 'lhouse', name: 'Г-образный дом', description: 'Гостиная, кухня-столовая и спальня в крыле, две пересекающиеся крыши.', build: lHouse },
+  {
+    id: 'mansard',
+    name: 'Дом с мансардой',
+    description: 'Цокольный этаж с мастерской, первый этаж, мансарда под двускатной крышей 40°, две лестницы.',
+    build: mansardHouse,
+  },
   { id: 'banya', name: 'Баня 6×4', description: 'Комната отдыха, моечная и парная из бруса.', build: banya },
   { id: 'garage', name: 'Гараж 4×6', description: 'Секционные ворота, боковая дверь, односкатная крыша.', build: garage },
 ];

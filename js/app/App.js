@@ -15,6 +15,7 @@ import { loadSavedProject, setupAutosave } from '../io/storage.js';
 import { Editor2D } from '../editor/Editor2D.js';
 import { applyCanvasTheme } from '../editor/render/theme.js';
 import { createToaster, confirmDialog } from '../ui/feedback.js';
+import { ExchangeDialog } from '../ui/ExchangeDialog.js';
 import { openMenu } from '../ui/ContextMenu.js';
 import { TopBar } from '../ui/TopBar.js';
 import { Toolbar, BottomBar } from '../ui/Toolbar.js';
@@ -61,6 +62,7 @@ export class App {
     this._syncLayoutAttr();
     this.editor = new Editor2D(this, $('plan-host'));
     this.ui.presets = new PresetsDialog(this);
+    this.ui.exchange = new ExchangeDialog(this);
     this.ui.help = new HelpDialog(this);
     this.ui.settings = new SettingsDialog(this);
     this.ui.palette = new CommandPalette(this);
@@ -78,6 +80,7 @@ export class App {
     setupShortcuts(this);
     setupAutosave(this.bus, this.store);
     this.pwa = setupPWA(this);
+    this._setupFileDrop();
     this.editor.setTool('select');
 
     this.bus.on('settings:changed', ({ key }) => {
@@ -140,6 +143,21 @@ export class App {
     requestAnimationFrame(() => {
       this.editor.resize();
       this.view3d?.resize();
+    });
+  }
+
+  /** Файл проекта или ответ ИИ, брошенный на окно, — сразу в импорт. */
+  _setupFileDrop() {
+    const hasFile = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    window.addEventListener('dragover', (e) => {
+      if (hasFile(e)) e.preventDefault();
+    });
+    window.addEventListener('drop', async (e) => {
+      if (!hasFile(e) || e.target.closest?.('.xch-input')) return;
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (!file || this.modalOpen) return;
+      this.ui.exchange.open('import', { text: await file.text() });
     });
   }
 

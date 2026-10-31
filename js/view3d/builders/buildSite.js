@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { extrudePolygon, mergeGeometries, mesh, box } from '../meshUtils.js';
 import { mat } from '../materials.js';
 import { COLORS, ZONE_MATERIALS } from '../../model/defaults.js';
-import { bboxOf, dist } from '../../core/geometry.js';
+import { bboxOf, dist, pointInPolygon } from '../../core/geometry.js';
+import { excavationOutlines } from '../../geometry/excavation.js';
 
 export function buildSite(project) {
   const group = new THREE.Group();
@@ -11,19 +12,28 @@ export function buildSite(project) {
   const bb = bboxOf(b);
   const size = Math.max(160, Math.max(bb.w, bb.h) * 4);
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat('#cdd5c3', { roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set((bb.minX + bb.maxX) / 2, -0.01, (bb.minY + bb.maxY) / 2);
-  ground.receiveShadow = true;
+  // над подвалом в земле вырезан котлован — его видно при разрезе по этажу
+  const pits = excavationOutlines(project);
+  const inside = (poly, outer) => poly.every((p) => pointInPolygon(p, outer));
+  const cx = (bb.minX + bb.maxX) / 2;
+  const cy = (bb.minY + bb.maxY) / 2;
+  const half = size / 2;
+  const square = [
+    { x: cx - half, y: cy - half },
+    { x: cx + half, y: cy - half },
+    { x: cx + half, y: cy + half },
+    { x: cx - half, y: cy + half },
+  ];
+  const ground = mesh(extrudePolygon(square, -0.03, -0.01, pits.filter((h) => inside(h, square))), mat('#cdd5c3', { roughness: 1 }), null, { cast: false });
   group.add(ground);
 
-  const lawn = extrudePolygon(b, -0.01, 0.01);
+  const lawn = extrudePolygon(b, -0.01, 0.01, pits.filter((h) => inside(h, b)));
   if (lawn) group.add(mesh(lawn, mat(COLORS.lawn, { roughness: 1 }), { kind: 'site', id: 'site' }, { cast: false }));
 
   for (const z of project.zones) {
     const m = ZONE_MATERIALS[z.material] || ZONE_MATERIALS.lawn;
     const top = z.material === 'water' ? 0.015 : z.material === 'deck' ? 0.12 : 0.03;
-    const geo = extrudePolygon(z.points, 0, top);
+    const geo = extrudePolygon(z.points, 0, top, pits.filter((h) => inside(h, z.points)));
     if (!geo) continue;
     const material = z.material === 'water' ? mat(m.color, { roughness: 0.1, metalness: 0.1 }) : mat(m.color, { roughness: 0.95 });
     group.add(mesh(geo, material, { kind: 'zone', id: z.id }, { cast: false }));

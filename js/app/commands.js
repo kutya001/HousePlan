@@ -2,8 +2,8 @@
  * Команды уровня приложения: их вызывают кнопки, меню и горячие клавиши.
  * Каждая команда — один шаг истории.
  */
-import { getEntity, removeEntity, removeLevel, createLevel, levelIndex, createEmptyProject, normalizeProject, SITE_LEVEL } from '../model/project.js';
-import { copyLevelLayout, duplicateEntities, autoRoofRect, splitRoomInHalf } from '../model/operations.js';
+import { getEntity, removeEntity, removeLevel, levelIndex, createEmptyProject, normalizeProject, SITE_LEVEL, groundLevel } from '../model/project.js';
+import { duplicateEntities, autoRoofRect, splitRoomInHalf, addBasementLevel, addAtticLevel, addFloorLevel } from '../model/operations.js';
 import { fmtLen } from '../core/format.js';
 import { createRoom, createRoof } from '../model/factories.js';
 import { findFaces } from '../geometry/roomDetect.js';
@@ -180,24 +180,39 @@ export class Commands {
 
   /** mode: 'exterior' — копировать наружные стены, 'all' — всю планировку, 'empty' — пустой. */
   addLevel(mode = 'exterior') {
-    let id;
-    const from = this.project.levels[this.project.levels.length - 1];
-    this.store.commit((p) => {
-      const lvl = createLevel(p.levels.length, { height: from.height, slab: from.slab });
-      p.levels.push(lvl);
-      id = lvl.id;
-      if (mode !== 'empty') copyLevelLayout(p, from.id, lvl.id, { exteriorOnly: mode === 'exterior', rooms: mode === 'all' });
-      if (mode === 'exterior') this._roomFromOutline(p, lvl.id);
-      // крыша переезжает на новый верхний этаж
-      for (const r of p.roofs) if (r.levelId === from.id) r.levelId = lvl.id;
-    });
-    this.state.setLevel(id);
+    let lvl;
+    this.store.commit((p) => (lvl = addFloorLevel(p, mode)));
+    this.state.setLevel(lvl.id);
     this.app.toast(mode === 'empty' ? 'Добавлен пустой этаж' : 'Этаж добавлен, наружные стены скопированы');
   }
 
-  _roomFromOutline(p, levelId) {
-    const faces = findFaces(p.walls.filter((w) => w.levelId === levelId));
-    for (const f of faces) p.rooms.push(createRoom(levelId, f.poly, { name: 'Комната' }));
+  /** Подвал (semi = false) или цокольный этаж (semi = true). */
+  addBasement(semi = false) {
+    let lvl;
+    const f0 = this.project.foundation;
+    this.store.commit((p) => (lvl = addBasementLevel(p, { semi })));
+    this.state.setLevel(lvl.id);
+    const raised = semi && this.project.foundation > f0;
+    this.app.toast(
+      semi
+        ? `Цокольный этаж добавлен${raised ? ', цоколь поднят до 1,2 м — окна над землёй' : ''}. Лестницу ставьте на нём`
+        : 'Подвал добавлен под домом. Лестницу на первый этаж ставьте в подвале',
+      'info',
+      this._undoAction(),
+    );
+  }
+
+  /** Мансарда: стены до скатов, крыша — на ней. */
+  addAttic() {
+    const existing = this.project.levels.find((l) => l.kind === 'attic');
+    if (existing) {
+      this.state.setLevel(existing.id);
+      return this.app.toast('Мансарда уже есть — она выбрана');
+    }
+    let lvl;
+    this.store.commit((p) => (lvl = addAtticLevel(p)));
+    this.state.setLevel(lvl.id);
+    this.app.toast('Мансарда добавлена: стены срезаны скатами. Высоту «колена» и уклон крыши меняйте в свойствах', 'info', this._undoAction());
   }
 
   removeLevel(levelId) {
@@ -291,7 +306,7 @@ export class Commands {
     this.app.editor.tool?.cancel?.();
     this.store.load(project, { keepHistory });
     this.state.selection = [];
-    this.state.activeLevelId = project.levels[0].id;
+    this.state.activeLevelId = groundLevel(project).id;
     this.app.bus.emit('level:changed', { levelId: this.state.activeLevelId });
     this.app.bus.emit('selection:changed', { selection: [] });
     this.app.editor.fitToContent({ includeSite: !project.walls.length });

@@ -97,6 +97,60 @@ export function roofGeometry(roof, baseHeight) {
   return { surfaces, gables, plan: { outline, lines }, peak };
 }
 
+/** Высота конька над базой крыши (без построения геометрии). */
+export function roofPeak(roof) {
+  const t = Math.tan(Math.max(0, Math.min(70, roof.pitch ?? 30)) * DEG);
+  const w = Math.max(0.5, roof.w);
+  const d = Math.max(0.5, roof.d);
+  if (roof.type === 'flat') return 0.25;
+  if (roof.type === 'shed') return d * t;
+  if (roof.type === 'hip') return (Math.min(w, d) / 2) * t;
+  return (d / 2) * t;
+}
+
+/**
+ * Скаты крыши как плоскости h = a·x + b·y + c (x, y — план), высота — верх кровли.
+ * Нужны, чтобы срезать стены мансарды по скатам и считать высоту под крышей.
+ * @returns {{ planes: Array<{a,b,c}>, contains(p): boolean }}
+ */
+export function roofPlanes(roof, baseHeight) {
+  const t = Math.tan(Math.max(0, Math.min(70, roof.pitch ?? 30)) * DEG);
+  const w = Math.max(0.5, roof.w);
+  const d = Math.max(0.5, roof.d);
+  const o = Math.max(0, roof.overhang ?? 0.5);
+  const r = (roof.rotation || 0) * DEG;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  const H = baseHeight;
+  // локальные оси: lx = c·dx + s·dy, ly = −s·dx + c·dy
+  const plane = (kx, ky, k0) => ({
+    a: kx * c - ky * s,
+    b: kx * s + ky * c,
+    c: k0 - (kx * c - ky * s) * roof.x - (kx * s + ky * c) * roof.y,
+  });
+  const planes = [];
+  if (roof.type === 'flat') planes.push(plane(0, 0, H));
+  else if (roof.type === 'shed') planes.push(plane(0, t, H + (d / 2) * t));
+  else {
+    planes.push(plane(0, -t, H + (d / 2) * t), plane(0, t, H + (d / 2) * t));
+    if (roof.type === 'hip') planes.push(plane(-t, 0, H + (w / 2) * t), plane(t, 0, H + (w / 2) * t));
+  }
+  const contains = (p) => {
+    const dx = p.x - roof.x;
+    const dy = p.y - roof.y;
+    return Math.abs(c * dx + s * dy) <= w / 2 + o + 1e-6 && Math.abs(-s * dx + c * dy) <= d / 2 + o + 1e-6;
+  };
+  return { planes, contains };
+}
+
+/** Высота верха кровли над точкой плана (Infinity — точка не под крышей). */
+export function roofHeightAt(rp, p) {
+  if (!rp.contains(p)) return Infinity;
+  let h = Infinity;
+  for (const pl of rp.planes) h = Math.min(h, pl.a * p.x + pl.b * p.y + pl.c);
+  return h;
+}
+
 /** Направление ската для стрелок на плане (для односкатной). */
 export function shedArrow(roof) {
   const a = toWorld({ x: 0, y: roof.d / 2 }, roof.x, roof.y, roof.rotation || 0);

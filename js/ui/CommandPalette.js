@@ -24,6 +24,9 @@ export class CommandPalette {
     cmd('Повторить', 'redo', () => c.redo(), 'Ctrl+Shift+Z');
     cmd('Добавить этаж (копировать наружные стены)', 'layers', () => c.addLevel('exterior'));
     cmd('Добавить пустой этаж', 'layers', () => c.addLevel('empty'));
+    cmd('Добавить мансарду (стены под скатами крыши)', 'roof', () => c.addAttic());
+    cmd('Добавить цокольный этаж', 'layers', () => c.addBasement(true));
+    cmd('Добавить подвал', 'layers', () => c.addBasement(false));
     cmd('Найти все комнаты на этаже', 'room', () => c.autoRooms());
     cmd('Крыша по контуру верхнего этажа', 'roof', () => c.autoRoof());
     cmd('Выделить всё на этаже', 'select', () => c.selectAll(), 'Ctrl+A');
@@ -37,6 +40,9 @@ export class CommandPalette {
     cmd('Светлая тема', 'sun', () => app.state.setSetting('theme', 'light'), 'Оформление');
     cmd('Настройки', 'settings', () => app.ui.settings.open(), 'Приложение');
     cmd('Сохранить проект в файл', 'save', () => app.file.save(), 'Ctrl+S');
+    cmd('Построить дом с ИИ (промпт для нейросети)', 'spark', () => app.ui.exchange.open('ai'), 'Файл');
+    cmd('Импорт проекта: ответ ИИ или JSON', 'swap', () => app.ui.exchange.open('import'), 'Файл');
+    cmd('Экспорт проекта в JSON', 'download', () => app.ui.exchange.open('export'), 'Файл');
     cmd('Открыть файл проекта', 'open', () => app.file.open(), 'Ctrl+O');
     cmd('Новый проект', 'plus', () => c.newProject(), 'Файл');
     cmd('Картинка плана (PNG)', 'image', () => app.file.exportPlanPNG(), 'Файл');

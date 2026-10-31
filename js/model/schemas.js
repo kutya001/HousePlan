@@ -3,7 +3,8 @@
  * Панель строит форму автоматически: каждое поле знает, как прочитать и записать значение.
  */
 import { DEG, polygonArea } from '../core/geometry.js';
-import { fmtArea, fmtSotki } from '../core/format.js';
+import { fmtArea, fmtSotki, fmtElev } from '../core/format.js';
+import { LEVEL_KINDS, levelElevation, kneeWall } from './project.js';
 import {
   WALL_KINDS,
   FLOOR_MATERIALS,
@@ -186,8 +187,27 @@ export const SCHEMAS = {
 
 export const LEVEL_SCHEMA = [
   { type: 'text', label: 'Название', get: (l) => l.name, set: (l, v) => (l.name = v) },
-  num('height', 'Высота в чистоте', { min: 2, max: 8, step: 0.05 }),
+  select('kind', 'Тип этажа', LEVEL_KINDS, { get: (l) => l.kind || 'floor' }),
+  num('height', 'Высота в чистоте', { min: 2, max: 8, step: 0.05, visible: (l) => l.kind !== 'attic' }),
+  num('kneeWall', 'Высота «колена»', {
+    min: 0.3,
+    max: 2.5,
+    step: 0.05,
+    hint: 'От пола мансарды до начала скатов крыши у наружных стен',
+    get: (l) => kneeWall(l),
+    visible: (l) => l.kind === 'attic',
+  }),
+  num('foundation', 'Над землёй', {
+    min: 0,
+    max: 2.5,
+    step: 0.05,
+    hint: 'Насколько верх подвала (пол первого этажа) поднят над землёй — это высота цоколя',
+    get: (l, p) => p.foundation,
+    set: (l, v, p) => (p.foundation = v),
+    visible: (l) => l.kind === 'basement',
+  }),
   num('slab', 'Толщина перекрытия', { min: 0.1, max: 0.6 }),
+  { type: 'readonly', label: 'Отметка пола', get: (l, p) => `${fmtElev(levelElevation(p, l.id))} м` },
 ];
 
 export const PROJECT_SCHEMA = [

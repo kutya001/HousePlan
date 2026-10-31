@@ -277,6 +277,14 @@ input[type='checkbox'] {
 .menu-item:hover {
   background: var(--surface-2);
 }
+.menu-item-2 {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.menu-item-2 small {
+  font-size: var(--fs-xs);
+}
 .menu-sep {
   height: 1px;
   margin: 5px 4px;
@@ -440,6 +448,28 @@ kbd {
 }
 .level-row.active .level-name {
   color: var(--accent-ink);
+}
+.level-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  vertical-align: 1px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.level-badge-basement {
+  background: rgba(143, 139, 133, 0.22);
+}
+.level-badge-attic {
+  background: rgba(138, 74, 58, 0.16);
+  color: #8a4a3a;
+}
+:root[data-theme='dark'] .level-badge-attic {
+  color: #e2a08f;
 }
 .level-meta {
   color: var(--ink-3);
@@ -881,4 +911,154 @@ kbd {
   padding: 2px 6px;
   border-radius: 5px;
   background: var(--surface-2);
+}
+
+/* ── Импорт и экспорт, ИИ-помощник ─────────────────────────────────── */
+.xch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.xch-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.xch-pane > p {
+  margin: 0;
+}
+.xch-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+.xch-label {
+  font-weight: 600;
+}
+.xch-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.xch-wishes,
+.xch-code {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  resize: vertical;
+  line-height: 1.45;
+}
+.xch-code {
+  font: 12px/1.45 ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.xch-input {
+  background: var(--surface);
+  color: var(--ink);
+}
+.xch-input.drag {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+}
+.xch-wishes:focus,
+.xch-code:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.xch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.xch-chips .chip {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 11px;
+  text-align: left;
+}
+.xch-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.xch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.xch-actions-end {
+  justify-content: flex-end;
+}
+.xch-report:empty {
+  display: none;
+}
+.xch-report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.xch-report p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.xch-ok {
+  color: var(--snap);
+  font-weight: 600;
+}
+.xch-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+.xch-warn {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.xch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-s);
+  font-variant-numeric: tabular-nums;
+}
+.xch-table th,
+.xch-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+.xch-table th:first-child,
+.xch-table td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+.xch-table th {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+@media (max-width: 760px) {
+  .xch-table th:nth-child(n + 6),
+  .xch-table td:nth-child(n + 6) {
+    display: none;
+  }
 }

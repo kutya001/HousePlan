@@ -9,6 +9,12 @@ export function fmtLen(meters) {
   return `${nf2.format(meters)} м`;
 }
 
+/** Отметка со знаком: 0.45 → «+0,45», −2.35 → «−2,35» */
+export function fmtElev(meters) {
+  const v = Math.round(meters * 100) / 100;
+  return `${v < 0 ? '−' : '+'}${nf2.format(Math.abs(v))}`;
+}
+
 /** Без единиц: 3.456 → «3,46» */
 export function fmtLenShort(meters) {
   return nf2.format(meters);

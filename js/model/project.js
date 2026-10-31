@@ -6,7 +6,7 @@
  *   version, name,
  *   foundation,                       // высота цоколя
  *   site:   { boundary:[{x,y}], fence:{ enabled, height } },
- *   levels: [{ id, name, height, slab }],
+ *   levels: [{ id, name, kind, height, slab, kneeWall }], // kind: floor | basement | attic
  *   walls:    [{ id, levelId, x1,y1,x2,y2, thickness, height|null, kind, color|null }],
  *   openings: [{ id, wallId, kind, style, t, width, height, sill, flipSide, flipHinge }],
  *   rooms:    [{ id, levelId, name, points:[{x,y}], floor }],
@@ -18,6 +18,7 @@
  */
 import { uid } from '../core/ids.js';
 import { DEFAULTS, COLORS } from './defaults.js';
+import { roofPeak } from '../geometry/roofGeometry.js';
 
 export const SCHEMA_VERSION = 1;
 export const SITE_LEVEL = 'site';
@@ -44,10 +45,14 @@ export const KIND_LABEL = {
   site: 'Участок',
 };
 
+/** Виды этажей: обычный, подземный (подвал или цокольный), мансарда под скатами крыши. */
+export const LEVEL_KINDS = { floor: 'Обычный', basement: 'Подвал / цокольный', attic: 'Мансарда' };
+
 export function createLevel(index, overrides = {}) {
   return {
     id: uid('lvl'),
     name: `${index + 1} этаж`,
+    kind: 'floor',
     height: DEFAULTS.levelHeight,
     slab: DEFAULTS.slab,
     ...overrides,
@@ -115,14 +120,27 @@ export function levelIndex(project, levelId) {
   return project.levels.findIndex((l) => l.id === levelId);
 }
 
-/** Отметка пола этажа над землёй. */
+export const isBasement = (level) => level?.kind === 'basement';
+export const isAttic = (level) => level?.kind === 'attic';
+
+/** Первый надземный этаж: на нём участок, крыльцо и объекты сада. */
+export function groundLevel(project) {
+  return project.levels.find((l) => !isBasement(l)) || project.levels[0];
+}
+
+/**
+ * Отметка пола этажа относительно земли. Первый надземный этаж стоит на цоколе,
+ * этажи выше — над ним, подвалы — ниже (отметка отрицательная).
+ */
 export function levelElevation(project, levelId) {
   if (levelId === SITE_LEVEL) return 0;
+  const levels = project.levels;
+  const g = Math.max(0, levels.indexOf(groundLevel(project)));
+  let i = levels.findIndex((l) => l.id === levelId);
+  if (i < 0) i = levels.length;
   let z = project.foundation ?? DEFAULTS.foundation;
-  for (const l of project.levels) {
-    if (l.id === levelId) return z;
-    z += l.height + l.slab;
-  }
+  if (i >= g) for (let k = g; k < i; k++) z += levels[k].height + levels[k].slab;
+  else for (let k = i; k < g; k++) z -= levels[k].height + levels[k].slab;
   return z;
 }
 
@@ -131,17 +149,32 @@ export function levelWallHeight(level) {
   return level.height + level.slab;
 }
 
+/** Высота «колена» мансарды — от пола до низа скатов у наружных стен. */
+export function kneeWall(level) {
+  return level?.kneeWall ?? 1.2;
+}
+
+/**
+ * Высота стен по умолчанию. В мансарде стены доходят до конька —
+ * лишнее срезают скаты крыши (фронтоны получаются сами).
+ */
 export function wallHeight(project, wall) {
   if (wall.height) return wall.height;
   const level = getLevel(project, wall.levelId);
-  return level ? levelWallHeight(level) : DEFAULTS.levelHeight + DEFAULTS.slab;
+  if (!level) return DEFAULTS.levelHeight + DEFAULTS.slab;
+  if (isAttic(level)) {
+    let peak = 0;
+    for (const r of project.roofs) if (r.levelId === level.id) peak = Math.max(peak, roofPeak(r));
+    if (peak > 0) return kneeWall(level) + peak + 0.4;
+  }
+  return levelWallHeight(level);
 }
 
-/** Отметка верха стен этажа — на ней лежит крыша. */
+/** Отметка, на которой лежит крыша: верх стен этажа, у мансарды — верх «колена». */
 export function levelTop(project, levelId) {
   const level = getLevel(project, levelId);
   if (!level) return 0;
-  return levelElevation(project, levelId) + levelWallHeight(level);
+  return levelElevation(project, levelId) + (isAttic(level) ? kneeWall(level) : levelWallHeight(level));
 }
 
 export function levelAbove(project, levelId) {
@@ -171,7 +204,15 @@ export function openingsOfWall(project, wallId) {
 }
 
 export function isGroundLevel(project, levelId) {
-  return project.levels[0]?.id === levelId;
+  return groundLevel(project)?.id === levelId;
+}
+
+/** Обычные этажи нумеруются от первого надземного: «1 этаж», «2 этаж»… */
+export function renumberLevels(project) {
+  const g = project.levels.indexOf(groundLevel(project));
+  project.levels.forEach((l, i) => {
+    if (/^\d+ этаж$/.test(l.name) && !isBasement(l) && !isAttic(l)) l.name = `${i - g + 1} этаж`;
+  });
 }
 
 /** Удаляет объект и всё, что от него зависит. */
@@ -189,8 +230,6 @@ export function removeLevel(project, levelId) {
   project.walls = project.walls.filter((w) => w.levelId !== levelId);
   project.openings = project.openings.filter((o) => !wallIds.has(o.wallId));
   for (const key of ['rooms', 'stairs', 'items', 'roofs']) project[key] = project[key].filter((e) => e.levelId !== levelId);
-  project.levels.forEach((l, i) => {
-    if (/^\d+ этаж$/.test(l.name)) l.name = `${i + 1} этаж`;
-  });
+  renumberLevels(project);
   return true;
 }

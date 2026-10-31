@@ -70,6 +70,45 @@ export function extrudePolygon(points, y0, y1, holes = []) {
 }
 
 /**
+ * Призма с наклонным верхом: низ на y0, верх каждой вершины — topAt(p).
+ * Для стен мансарды, срезанных скатами крыши.
+ */
+export function prismVarTop(points, y0, topAt) {
+  if (points.length < 3) return null;
+  const outer = signed2D(points) > 0 ? points : [...points].reverse();
+  const tops = outer.map((p) => Math.max(y0 + 0.01, topAt(p)));
+  let tris;
+  try {
+    tris = THREE.ShapeUtils.triangulateShape(
+      outer.map((p) => new THREE.Vector2(p.x, p.y)),
+      [],
+    );
+  } catch {
+    tris = [];
+  }
+  const pos = [];
+  for (const [i, j, k] of tris) {
+    const a = outer[i];
+    const b = outer[j];
+    const c = outer[k];
+    pushTri(pos, [a.x, tops[i], a.y], [b.x, tops[j], b.y], [c.x, tops[k], c.y], [0, 1, 0]);
+    pushTri(pos, [a.x, y0, a.y], [b.x, y0, b.y], [c.x, y0, c.y], [0, -1, 0]);
+  }
+  for (let i = 0; i < outer.length; i++) {
+    const n = (i + 1) % outer.length;
+    const p = outer[i];
+    const q = outer[n];
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    if (Math.abs(dx) + Math.abs(dy) < 1e-7) continue;
+    const want = [dy, 0, -dx];
+    pushTri(pos, [p.x, y0, p.y], [q.x, y0, q.y], [q.x, tops[n], q.y], want);
+    pushTri(pos, [p.x, y0, p.y], [q.x, tops[n], q.y], [p.x, tops[i], p.y], want);
+  }
+  return toGeometry(pos);
+}
+
+/**
  * Призма из плоского 3D-многоугольника (скат, фронтон): верх — сам многоугольник,
  * низ — он же, сдвинутый на вектор offset.
  */

@@ -1,7 +1,23 @@
-/** Этажи: переключение, добавление (с копированием стен), удаление. */
+/** Этажи: переключение, добавление (этаж, мансарда, цокольный, подвал), удаление. */
 import { h, icon, clear } from './dom.js';
-import { levelElevation } from '../model/project.js';
-import { fmtLenShort } from '../core/format.js';
+import { levelElevation, kneeWall } from '../model/project.js';
+import { fmtLenShort, fmtElev } from '../core/format.js';
+
+/** Пункты меню «+ Этаж»: [подпись, пояснение, действие] */
+export function levelAddItems(app) {
+  const c = app.commands;
+  return [
+    ['Этаж сверху', 'наружные стены копируются', () => c.addLevel('exterior')],
+    ['Этаж с планировкой', 'копия всех стен и комнат', () => c.addLevel('all')],
+    ['Пустой этаж', '', () => c.addLevel('empty')],
+    null,
+    ['Мансарда', 'стены до скатов крыши', () => c.addAttic()],
+    ['Цокольный этаж', 'наполовину в земле, с окнами', () => c.addBasement(true)],
+    ['Подвал', 'целиком под землёй', () => c.addBasement(false)],
+  ];
+}
+
+const KIND_BADGE = { basement: 'под землёй', attic: 'мансарда' };
 
 export class LevelsPanel {
   constructor(app, root) {
@@ -21,23 +37,22 @@ export class LevelsPanel {
     const menu = h(
       'div',
       { class: 'menu menu-right', role: 'menu', hidden: true },
-      [
-        ['Копировать наружные стены', 'exterior'],
-        ['Копировать всю планировку', 'all'],
-        ['Пустой этаж', 'empty'],
-      ].map(([label, mode]) =>
-        h(
-          'button',
-          {
-            class: 'menu-item',
-            role: 'menuitem',
-            onclick: () => {
-              menu.hidden = true;
-              app.commands.addLevel(mode);
-            },
-          },
-          label,
-        ),
+      levelAddItems(app).map((it) =>
+        it
+          ? h(
+              'button',
+              {
+                class: 'menu-item menu-item-2',
+                role: 'menuitem',
+                onclick: () => {
+                  menu.hidden = true;
+                  it[2]();
+                },
+              },
+              h('span', {}, it[0]),
+              it[1] ? h('small', { class: 'muted' }, it[1]) : null,
+            )
+          : h('div', { class: 'menu-sep', role: 'separator' }),
       ),
     );
     const addBtn = h(
@@ -66,8 +81,12 @@ export class LevelsPanel {
         h(
           'button',
           { class: 'level-pick', onclick: () => app.state.setLevel(l.id), 'aria-current': active ? 'true' : null },
-          h('span', { class: 'level-name' }, l.name),
-          h('span', { class: 'level-meta' }, `отм. +${fmtLenShort(levelElevation(project, l.id))} · h ${fmtLenShort(l.height)}${walls ? '' : ' · пусто'}`),
+          h('span', { class: 'level-name' }, l.name, KIND_BADGE[l.kind] ? h('span', { class: `level-badge level-badge-${l.kind}` }, KIND_BADGE[l.kind]) : null),
+          h(
+            'span',
+            { class: 'level-meta' },
+            `отм. ${fmtElev(levelElevation(project, l.id))} · ${l.kind === 'attic' ? `колено ${fmtLenShort(kneeWall(l))}` : `h ${fmtLenShort(l.height)}`}${walls ? '' : ' · пусто'}`,
+          ),
         ),
         project.levels.length > 1
           ? h('button', { class: 'icon-btn icon-btn-small', 'data-tip': 'Удалить этаж', 'aria-label': `Удалить ${l.name}`, onclick: () => app.commands.removeLevel(l.id) }, icon('trash', 16))

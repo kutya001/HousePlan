@@ -244,3 +244,7 @@
   white-space: nowrap;
   z-index: 10;
 }
+/* нечётная последняя карточка — во всю ширину */
+.empty-action:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}

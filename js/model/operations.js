@@ -7,7 +7,7 @@ import { uid } from '../core/ids.js';
 import { DEG, dist, projectOnSegment, toLocal, toWorld, bboxOf, polygonSignedArea, polygonArea, pointInPolygon, polygonLabelPoint } from '../core/geometry.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { createWall, createRoom, createOpening, createRoof } from './factories.js';
-import { createLevel, getLevel, levelIndex, COLLECTION, getEntity, SITE_LEVEL } from './project.js';
+import { createLevel, getLevel, levelIndex, COLLECTION, getEntity, SITE_LEVEL, isBasement, isAttic, renumberLevels } from './project.js';
 import { DEFAULTS } from './defaults.js';
 import { JOIN_EPS, computeWallGeometry } from '../geometry/wallGeometry.js';
 import { rayToWalls, rayToWallAxes } from '../geometry/alignment.js';
@@ -89,6 +89,73 @@ export function addOpeningAt(project, wall, point, kind, opts = {}) {
   const op = createOpening(wall.id, kind, { ...opts, t: pr.along });
   project.openings.push(op);
   return op;
+}
+
+/** Наружные стены этажа — на другой этаж, высота «как у этажа»; пол по контуру. */
+function copyShell(project, fromId, toId, roomName) {
+  for (const w of project.walls.filter((x) => x.levelId === fromId && x.kind === 'exterior')) {
+    project.walls.push({ ...w, id: uid('wall'), levelId: toId, height: null });
+  }
+  for (const f of findFaces(project.walls.filter((x) => x.levelId === toId))) project.rooms.push(createRoom(toId, f.poly, { name: roomName }));
+}
+
+/**
+ * Подвал или цокольный этаж под домом. Наружные стены повторяют этаж над ним.
+ * @param semi — цокольный: наполовину над землёй, цоколь поднимается до 1,2 м
+ * @returns новый этаж
+ */
+export function addBasementLevel(project, { semi = false } = {}) {
+  const above = project.levels[0];
+  const count = project.levels.filter(isBasement).length;
+  const name = semi ? 'Цокольный этаж' : count ? `Подвал ${count + 1}` : 'Подвал';
+  const lvl = createLevel(0, { name, kind: 'basement', height: semi ? 2.6 : 2.4, slab: DEFAULTS.slab });
+  project.levels.unshift(lvl);
+  copyShell(project, above.id, lvl.id, semi ? 'Цокольный этаж' : 'Подвал');
+  if (semi) project.foundation = Math.max(project.foundation ?? DEFAULTS.foundation, 1.2);
+  return lvl;
+}
+
+/**
+ * Мансарда на самом верху: стены до скатов, крыша верхнего этажа переезжает на неё;
+ * если крыши не было — ставится двускатная.
+ * @returns новый этаж или null, если мансарда уже есть
+ */
+export function addAtticLevel(project, { pitch = 40, knee = 1.2 } = {}) {
+  if (project.levels.some(isAttic)) return null;
+  const top = project.levels[project.levels.length - 1];
+  const lvl = createLevel(project.levels.length, { name: 'Мансарда', kind: 'attic', height: 2.5, slab: DEFAULTS.slab, kneeWall: knee });
+  project.levels.push(lvl);
+  copyShell(project, top.id, lvl.id, 'Мансарда');
+  let moved = 0;
+  for (const r of project.roofs) {
+    if (r.levelId !== top.id) continue;
+    r.levelId = lvl.id;
+    if (r.type === 'flat') r.type = 'gable';
+    moved++;
+  }
+  if (!moved) {
+    const rect = autoRoofRect(project, lvl.id);
+    if (rect) project.roofs.push(createRoof(lvl.id, rect.x, rect.y, rect.w, rect.d, { type: 'gable', rotation: rect.rotation, pitch }));
+  }
+  return lvl;
+}
+
+/**
+ * Обычный этаж: сверху, а если есть мансарда — под ней.
+ * @param mode 'exterior' | 'all' | 'empty'
+ */
+export function addFloorLevel(project, mode = 'exterior') {
+  const atticIdx = project.levels.findIndex(isAttic);
+  const at = atticIdx >= 0 ? atticIdx : project.levels.length;
+  const from = project.levels[Math.max(0, at - 1)];
+  const lvl = createLevel(at, { height: isBasement(from) || isAttic(from) ? DEFAULTS.levelHeight : from.height, slab: from.slab });
+  project.levels.splice(at, 0, lvl);
+  if (mode !== 'empty') copyLevelLayout(project, from.id, lvl.id, { exteriorOnly: mode === 'exterior', rooms: mode === 'all' });
+  if (mode === 'exterior') for (const f of findFaces(project.walls.filter((w) => w.levelId === lvl.id))) project.rooms.push(createRoom(lvl.id, f.poly, { name: 'Комната' }));
+  // крыша переезжает на новый верхний этаж (у мансарды она остаётся своей)
+  if (atticIdx < 0) for (const r of project.roofs) if (r.levelId === from.id) r.levelId = lvl.id;
+  renumberLevels(project);
+  return lvl;
 }
 
 /** Копия стен (и при желании комнат) одного этажа на другой. */

@@ -7,7 +7,7 @@
 import { h, icon } from './dom.js';
 import { openMenu } from './ContextMenu.js';
 import { levelElevation } from '../model/project.js';
-import { fmtLenShort } from '../core/format.js';
+import { fmtElev } from '../core/format.js';
 
 export class TopBar {
   constructor(app, root) {
@@ -95,6 +95,8 @@ export class TopBar {
       { label: 'Новый проект', icon: 'plus', onClick: () => app.commands.newProject() },
       { label: 'Открыть файл…', icon: 'open', kbd: 'Ctrl+O', onClick: () => app.file.open() },
       { label: 'Сохранить в файл', icon: 'save', kbd: 'Ctrl+S', onClick: () => app.file.save() },
+      { label: 'Импорт и экспорт…', icon: 'swap', onClick: () => app.ui.exchange.open('import') },
+      { label: 'Построить дом с ИИ…', icon: 'spark', onClick: () => app.ui.exchange.open('ai') },
       { separator: true },
       { label: 'Картинка плана (PNG)', icon: 'image', onClick: () => app.file.exportPlanPNG() },
       { label: 'Картинка 3D-вида (PNG)', icon: 'image', onClick: () => app.file.export3DPNG() },
@@ -128,7 +130,7 @@ export class TopBar {
     const app = this.app;
     const project = app.project;
     const items = [...project.levels].reverse().map((l) => ({
-      label: `${l.name}  ·  +${fmtLenShort(levelElevation(project, l.id))} м`,
+      label: `${l.name}  ·  ${fmtElev(levelElevation(project, l.id))} м`,
       icon: 'layers',
       active: l.id === app.state.activeLevelId,
       onClick: () => app.state.setLevel(l.id),
@@ -143,7 +145,9 @@ export class TopBar {
         { separator: true },
         { label: 'Добавить этаж (наружные стены)', icon: 'plus', onClick: () => app.commands.addLevel('exterior') },
         { label: 'Добавить этаж (вся планировка)', icon: 'copy', onClick: () => app.commands.addLevel('all') },
-        { label: 'Добавить пустой этаж', icon: 'plus', onClick: () => app.commands.addLevel('empty') },
+        { label: 'Добавить мансарду', icon: 'roof', onClick: () => app.commands.addAttic() },
+        { label: 'Добавить цокольный этаж', icon: 'layers', onClick: () => app.commands.addBasement(true) },
+        { label: 'Добавить подвал', icon: 'layers', onClick: () => app.commands.addBasement(false) },
         { label: 'Настроить этажи…', icon: 'settings', onClick: () => app.ui.side.open('levels') },
       ],
     });

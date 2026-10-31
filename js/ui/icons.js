@@ -40,6 +40,8 @@ export const ICONS = {
   bed: '<path d="M3 18V7M3 13h18v5M21 13a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="10.5" r="1.6"/>',
   jump: '<circle cx="12" cy="4.5" r="1.8"/><path d="M12 8v6M8 9.5l4 1.5 4-1.5M9 20l3-6 3 6"/><path d="M5 20h3M16 20h3" stroke-opacity=".5"/>',
   person: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7.5v7M8 10l4-1.5 4 1.5M9.5 21l2.5-6.5 2.5 6.5"/>',
+  spark: '<path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z"/><path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
+  swap: '<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
   walk: '<circle cx="13" cy="4.5" r="1.8"/><path d="M10 21l2.5-6-2.5-2 1-5 3 3 3 1M12.5 15l2.5 6M11 8l-3 2-1 3"/>',
   layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
   cut: '<path d="M3 15l9-5 9 5"/><path d="M3 19l9-5 9 5" stroke-dasharray="2 2.5"/><path d="M12 3v7"/>',

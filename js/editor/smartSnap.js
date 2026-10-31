@@ -7,7 +7,7 @@
  * Результат несёт подпись («по центру», «в угол»…) и линии-подсказки для отрисовки.
  */
 import { add, sub, mul, dot, cross, dist, snapValue, normalizeDeg, pointInPolygon, rectCorners } from '../core/geometry.js';
-import { getEntity, openingsOfWall, levelIndex, getLevel, SITE_LEVEL } from '../model/project.js';
+import { getEntity, openingsOfWall, levelIndex, getLevel, SITE_LEVEL, groundLevel } from '../model/project.js';
 import { pointOnWall } from '../geometry/wallGeometry.js';
 import { clearSegmentAt, clearSegments, parallelWalls, rayToWalls } from '../geometry/alignment.js';
 import { fmtLenShort } from '../core/format.js';
@@ -237,7 +237,7 @@ export function alignRect(editor, obj, { disabled = false } = {}) {
   const grid = editor.gridStep;
   const res = { x: obj.x, y: obj.y, labels: [], guides: [], dims: [] };
   if (disabled || !editor.app.state.settings.snap) return res;
-  const levelId = obj.levelId === SITE_LEVEL ? project.levels[0]?.id : obj.levelId;
+  const levelId = obj.levelId === SITE_LEVEL ? groundLevel(project)?.id : obj.levelId;
   const geoms = editor.geomsFor(levelId);
   const ext = halfExtents(obj.w, obj.d, obj.rotation);
   const hx = ext?.hx ?? 0;

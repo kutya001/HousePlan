@@ -13,7 +13,7 @@ import { FollowCamera } from './FollowCamera.js';
 import { WalkHUD } from './WalkHUD.js';
 import { findSpot } from './seats.js';
 import { computeWallGeometry, pointOnWall } from '../../geometry/wallGeometry.js';
-import { levelElevation, SITE_LEVEL, getLevel } from '../../model/project.js';
+import { levelElevation, SITE_LEVEL, getLevel, groundLevel } from '../../model/project.js';
 import { polygonLabelPoint, polygonArea, pointInPolygon } from '../../core/geometry.js';
 
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
@@ -342,7 +342,7 @@ export class CharacterMode {
   _itemsHere() {
     const { project } = this.app;
     const lvl = this.levelId;
-    const ground = project.levels[0]?.id === lvl;
+    const ground = groundLevel(project)?.id === lvl;
     return project.items.filter((it) => it.levelId === lvl || (ground && it.levelId === SITE_LEVEL));
   }
 

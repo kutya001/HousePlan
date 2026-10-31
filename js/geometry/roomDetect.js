@@ -69,6 +69,39 @@ function buildGraph(walls) {
 
 /** Все ограниченные грани графа стен. */
 export function findFaces(walls) {
+  return traceFaces(walls).inner;
+}
+
+/**
+ * Пятно застройки этажа: внешние контуры стен, раздвинутые наружу на полутолщину
+ * стен. Нужно, чтобы вырезать в грунте котлован под подвал.
+ * @returns {Array<Array<{x,y}>>}
+ */
+export function levelFootprints(walls) {
+  const out = [];
+  for (const loop of traceFaces(walls).outer) {
+    let pts = loop.map((e) => ({ ...e.p }));
+    let dist = loop.map((e) => e.wall.thickness / 2);
+    // убрать вершины на прямой (стена, разрезанная примыканием)
+    for (let i = 0; i < pts.length && pts.length > 3; ) {
+      const a = pts[(i + pts.length - 1) % pts.length];
+      const b = pts[i];
+      const c = pts[(i + 1) % pts.length];
+      const cr = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(cr) < 1e-6 * Math.max(1, Math.hypot(c.x - a.x, c.y - a.y))) {
+        const k = (i + pts.length - 1) % pts.length;
+        dist[k] = Math.max(dist[k], dist[i]);
+        pts.splice(i, 1);
+        dist.splice(i, 1);
+      } else i++;
+    }
+    if (pts.length < 3) continue;
+    out.push(insetPolygon(pts, dist.map((d) => -d)));
+  }
+  return out;
+}
+
+function traceFaces(walls) {
   const { verts, edges } = buildGraph(walls);
   const out = verts.map(() => []);
   const half = [];
@@ -90,6 +123,7 @@ export function findFaces(walls) {
   }
 
   const faces = [];
+  const outer = [];
   for (const start of half) {
     if (start.used) continue;
     const loop = [];
@@ -107,8 +141,9 @@ export function findFaces(walls) {
     const poly = loop.map((e) => verts[e.from]);
     const area = polygonSignedArea(poly);
     if (area > 1e-4) faces.push({ poly: simplifyPolygon(poly.map((p) => ({ ...p }))), area, edges: loop });
+    else if (area < -1e-4) outer.push(loop.map((e) => ({ p: verts[e.from], wall: e.wall })));
   }
-  return faces;
+  return { inner: faces, outer };
 }
 
 /** Контур комнаты под точкой или null. */

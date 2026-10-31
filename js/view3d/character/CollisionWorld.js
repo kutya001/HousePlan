@@ -12,7 +12,10 @@ import { computeWallGeometry, wallPieces3D, clipWallRange } from '../../geometry
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { porchSteps } from '../../geometry/porch.js';
 import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf } from '../../core/geometry.js';
-import { levelElevation, wallHeight, levelBelow, SITE_LEVEL } from '../../model/project.js';
+import { levelElevation, wallHeight, levelBelow, levelTop, groundLevel, isBasement, SITE_LEVEL } from '../../model/project.js';
+import { excavationOutlines, inExcavation } from '../../geometry/excavation.js';
+import { levelFootprints } from '../../geometry/roomDetect.js';
+import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairRise3D } from '../builders/buildStructure.js';
 
 /** Предметы, сквозь которые можно пройти, — только опора (ковёр) или вовсе ничего. */
@@ -36,6 +39,11 @@ export class CollisionWorld {
   build(project) {
     this.solids = [];
     this.levels = project.levels.map((l) => ({ id: l.id, base: levelElevation(project, l.id) }));
+    // котлованы под подвалами: там нет грунта на отметке 0
+    this.pits = excavationOutlines(project);
+    // скаты крыш — «потолок» мансарды: под низким скатом не пройти во весь рост
+    this.roofs = project.roofs.map((r) => roofPlanes(r, levelTop(project, r.levelId)));
+    const ground = groundLevel(project);
     project.levels.forEach((level, i) => {
       const base = levelElevation(project, level.id);
       const walls = project.walls.filter((w) => w.levelId === level.id);
@@ -61,13 +69,15 @@ export class CollisionWorld {
           if (i === 0 && g.wall.kind === 'exterior' && base > 0.01 && o.kind !== 'window') this._add(poly, 0, base, { kind: 'floor', noSide: true });
         }
       }
-      if (i === 0) for (const st of porchSteps(project, level.id, geoms, base)) this._add(st.poly, 0, st.top, { kind: 'stair' });
+      if (level === ground) for (const st of porchSteps(project, level.id, geoms, base)) this._add(st.poly, 0, st.top, { kind: 'stair' });
+      // дно котлована подвала
+      if (isBasement(level)) for (const fp of levelFootprints(walls)) this._add(fp, base - 0.35, base - 0.015, { kind: 'floor', noSide: true });
 
       // полы с вырезами под лестницы с этажа ниже
       const below = levelBelow(project, level.id);
       const holes = [];
       if (below) for (const s of project.stairs.filter((x) => x.levelId === below.id)) holes.push(stairLayout(s, stairRise3D(project, s)).outline);
-      const y0 = i === 0 ? 0 : base - (below?.slab ?? 0.25);
+      const y0 = i === 0 ? (base > 0.01 ? 0 : base - 0.1) : base - (below?.slab ?? 0.25);
       for (const room of project.rooms.filter((r) => r.levelId === level.id)) {
         const inner = holes.filter((hl) => hl.every((p) => pointInPolygon(p, room.points)));
         this._add(room.points, y0, base, { kind: 'floor', holes: inner, noSide: true, ref: { kind: 'room', id: room.id } });
@@ -150,7 +160,8 @@ export class CollisionWorld {
    * @returns {{ y, solid }}
    */
   supportAt(x, z, maxY) {
-    let best = { y: 0, solid: null };
+    // земля — везде, кроме котлована подвала; ниже — «бездна», чтобы не падать вечно
+    let best = maxY >= -1e-4 && !inExcavation(this.pits, { x, y: z }) ? { y: 0, solid: null } : { y: -50, solid: null };
     for (const s of this.solids) {
       if (s.y1 > maxY + 1e-4 || s.y1 <= best.y || !this._active(s)) continue;
       if (this._contains(s, x, z)) best = { y: s.y1, solid: s };
@@ -165,7 +176,23 @@ export class CollisionWorld {
       if (s.y0 < fromY || s.y0 >= best || !this._active(s)) continue;
       if (this._contains(s, x, z)) best = s.y0;
     }
+    const r = this._roofAbove(x, z, fromY);
+    return Math.min(best, r);
+  }
+
+  /** Низ ската крыши над точкой, если он выше fromY. */
+  _roofAbove(x, z, fromY) {
+    let best = Infinity;
+    for (const rp of this.roofs) {
+      const h = roofHeightAt(rp, { x, y: z }) - 0.25;
+      if (h >= fromY && h < best) best = h;
+    }
     return best;
+  }
+
+  /** Высота от ступней до ската крыши (Infinity — над головой нет крыши). */
+  headroom(x, z, feetY) {
+    return this._roofAbove(x, z, feetY + 0.3) - feetY;
   }
 
   /**

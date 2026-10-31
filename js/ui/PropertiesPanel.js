@@ -37,7 +37,12 @@ export class PropertiesPanel {
   }
 
   _key(sel) {
-    return `${this.app.state.activeLevelId}|${sel.map((s) => `${s.kind}:${s.id}`).join(',')}`;
+    // поля формы зависят от вида объекта (форма лестницы, тип этажа) — при смене перестраиваем
+    const p = this.app.project;
+    const lvl = getLevel(p, this.app.state.activeLevelId);
+    const one = sel.length === 1 ? getEntity(p, sel[0].kind, sel[0].id) : null;
+    const shape = one ? `${one.shape ?? ''}${one.type ?? ''}${one.kind ?? ''}${one.style ?? ''}` : '';
+    return `${this.app.state.activeLevelId}:${lvl?.kind}|${sel.map((s) => `${s.kind}:${s.id}`).join(',')}|${shape}`;
   }
 
   render() {
