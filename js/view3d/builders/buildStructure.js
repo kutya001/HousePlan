@@ -1,13 +1,16 @@
 /** Перекрытия (полы комнат с проёмами под лестницы), лестницы и крыши. */
 import * as THREE from 'three';
-import { extrudePolygon, prism3D, mergeGeometries, mesh, cylinder } from '../meshUtils.js';
+import { extrudePolygon, prism3D, mergeGeometries, mesh, cylinder, box } from '../meshUtils.js';
 import { mat } from '../materials.js';
-import { COLORS, FLOOR_MATERIALS } from '../../model/defaults.js';
+import { COLORS, FLOOR_MATERIALS, TREAD, stairStyle } from '../../model/defaults.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
 import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
+
+/** Подъём чистого пола над отметкой этажа в 3D — против мерцания совпадающих граней. */
+export const FLOOR_LIFT = 0.006;
 
 export function stairRise3D(project, stair) {
   const lvl = getLevel(project, stair.levelId);
@@ -26,7 +29,9 @@ export function buildFloors(project, level, base, index) {
   const y0 = index === 0 ? (base > 0.01 ? 0 : base - 0.1) : base - (below?.slab ?? 0.25);
   for (const room of project.rooms.filter((r) => r.levelId === level.id)) {
     const inner = holes.filter((h) => h.every((p) => pointInPolygon(p, room.points)));
-    const geo = extrudePolygon(room.points, y0, base, inner);
+    // чистый пол на несколько миллиметров выше верха стен этажа ниже и цоколя: иначе
+    // их верхние грани лежат в одной плоскости с полом и «моргают» (z-fighting)
+    const geo = extrudePolygon(room.points, y0, base + FLOOR_LIFT, inner);
     if (!geo) continue;
     const color = (FLOOR_MATERIALS[room.floor] || FLOOR_MATERIALS.laminate).color;
     group.add(mesh(geo, mat(color, { roughness: 0.7 }), { kind: 'room', id: room.id }, { cast: index > 0 }));
@@ -40,21 +45,143 @@ export function buildFloors(project, level, base, index) {
   return group;
 }
 
+/**
+ * Лестницы трёх конструкций:
+ *  solid    — монолитный марш: каждая ступень — сплошной блок до пола;
+ *  stringer — открытые проступи на двух наклонных косоурах, площадки на стойках;
+ *  floating — консольные «парящие» проступи без опор (крепятся к стене).
+ * Винтовая — тонкие проступи вокруг стойки.
+ */
 export function buildStairs(project, levelId, base) {
   const group = new THREE.Group();
   for (const s of project.stairs.filter((x) => x.levelId === levelId)) {
     const lay = stairLayout(s, stairRise3D(project, s));
-    const geos = lay.steps.map((st) =>
-      st.thin ? extrudePolygon(st.poly, base + st.top - 0.05, base + st.top) : extrudePolygon(st.poly, base, base + st.top),
-    );
-    if (s.shape === 'spiral') geos.push(cylinder(0.06, lay.risers * lay.riser + 0.9, s.x, base, s.y, 12));
-    const geo = mergeGeometries(geos);
+    const style = stairStyle(s);
+    const geos = [];
+    if (s.shape === 'spiral') {
+      for (const st of lay.steps) geos.push(extrudePolygon(st.poly, base + st.top - 0.05, base + st.top));
+      geos.push(cylinder(0.06, lay.risers * lay.riser + 0.9, s.x, base, s.y, 12));
+    } else if (style === 'solid') {
+      for (const st of lay.steps) geos.push(extrudePolygon(st.poly, base, base + st.top));
+    } else {
+      for (const st of lay.steps) {
+        const th = st.landing ? TREAD.landing : TREAD[style];
+        geos.push(extrudePolygon(st.poly, base + st.top - th, base + st.top));
+        // площадка на косоурах стоит на четырёх тонких стойках
+        if (st.landing && style === 'stringer') geos.push(...landingPosts(st.poly, base, base + st.top - th));
+      }
+      if (style === 'stringer') geos.push(...stringers(lay.steps, base));
+    }
+    const geo = mergeGeometries(geos.filter(Boolean));
     if (!geo) continue;
     const m = mesh(geo, mat(s.color || COLORS.stair, { roughness: 0.6 }), { kind: 'stair', id: s.id });
     m.userData.edges = true;
     group.add(m);
   }
   return group;
+}
+
+const STRINGER_T = 0.05; // толщина косоура
+const STRINGER_D = 0.24; // высота сечения косоура
+
+/** Косоуры каждого марша: две наклонные доски под краями проступей. */
+function stringers(steps, base) {
+  const out = [];
+  let prevTop = 0;
+  let run = [];
+  const flush = () => {
+    if (run.length >= 2) out.push(...runStringers(run, base, prevTop));
+    if (run.length) prevTop = run[run.length - 1].top;
+    run = [];
+  };
+  for (const st of steps) {
+    if (st.landing) {
+      flush();
+      prevTop = st.top;
+    } else run.push(st);
+  }
+  flush();
+  return out;
+}
+
+function runStringers(run, base, yStart) {
+  const c0 = centroid(run[0].poly);
+  const c1 = centroid(run[run.length - 1].poly);
+  let dx = c1.x - c0.x;
+  let dy = c1.y - c0.y;
+  const L = Math.hypot(dx, dy);
+  if (L < 1e-3) return [];
+  dx /= L;
+  dy /= L;
+  const vx = -dy;
+  const vy = dx;
+  let u0 = Infinity;
+  let u1 = -Infinity;
+  let w0 = Infinity;
+  let w1 = -Infinity;
+  for (const st of run) {
+    for (const p of st.poly) {
+      const u = p.x * dx + p.y * dy;
+      const w = p.x * vx + p.y * vy;
+      u0 = Math.min(u0, u);
+      u1 = Math.max(u1, u);
+      w0 = Math.min(w0, w);
+      w1 = Math.max(w1, w);
+    }
+  }
+  const depth = (u1 - u0) / run.length;
+  const th = TREAD.stringer;
+  const t1 = run[0].top;
+  const tN = run[run.length - 1].top;
+  const slope = (tN - t1) / Math.max(0.05, u1 - u0 - depth);
+  const yA = Math.max(yStart, t1 - th - (slope * depth) / 2);
+  const yB = tN - th;
+  const k = (yB - yA) / Math.max(0.05, u1 - u0);
+  // сечение в плоскости (u, высота): низ упирается в пол или площадку
+  let shape;
+  if (yA - STRINGER_D < yStart) {
+    const uC = Math.min(u1, u0 + (yStart - (yA - STRINGER_D)) / Math.max(1e-3, k));
+    shape = [
+      [u0, yStart],
+      [u0, yA],
+      [u1, yB],
+      [u1, Math.max(yStart, yB - STRINGER_D)],
+      [uC, yStart],
+    ];
+  } else {
+    shape = [
+      [u0, yA - STRINGER_D],
+      [u0, yA],
+      [u1, yB],
+      [u1, yB - STRINGER_D],
+    ];
+  }
+  const out = [];
+  for (const w of [w0, w1 - STRINGER_T]) {
+    const poly = shape.map(([u, y]) => ({ x: dx * u + vx * w, y: base + y, z: dy * u + vy * w }));
+    out.push(prism3D(poly, { x: vx * STRINGER_T, y: 0, z: vy * STRINGER_T }));
+  }
+  return out;
+}
+
+function landingPosts(poly, y0, y1) {
+  if (y1 - y0 < 0.1) return [];
+  const c = centroid(poly);
+  return poly.map((p) => {
+    const L = Math.hypot(c.x - p.x, c.y - p.y) || 1;
+    const k = Math.min(0.06, L / 2) / L;
+    return box(0.06, y1 - y0, 0.06, p.x + (c.x - p.x) * k, y0, p.y + (c.y - p.y) * k);
+  });
+}
+
+function centroid(poly) {
+  let x = 0;
+  let y = 0;
+  for (const p of poly) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / poly.length, y: y / poly.length };
 }
 
 export function buildRoof(project, roof) {

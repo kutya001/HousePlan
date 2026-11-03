@@ -19,7 +19,7 @@ export function renderForm(fields, getTarget, getProject, onChange) {
   for (const f of fields) {
     const target = getTarget();
     if (!target) break;
-    if (f.visible && !f.visible(target)) continue;
+    if (f.visible && !f.visible(target, getProject())) continue;
     const id = `f${++uidCounter}`;
     const row = h('div', { class: `form-row form-${f.type}` });
     const label = h('label', { for: id, class: 'form-label' }, f.label);

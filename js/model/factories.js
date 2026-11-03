@@ -34,6 +34,7 @@ export function createOpening(wallId, kind = 'door', opts = {}) {
     sill: opts.sill ?? base.sill,
     flipSide: !!opts.flipSide,
     flipHinge: !!opts.flipHinge,
+    ...(opts.descent ? { descent: opts.descent } : {}),
   };
 }
 
@@ -67,6 +68,7 @@ export function createStair(levelId, x, y, opts = {}) {
     length: opts.length ?? p.length,
     flight: opts.flight ?? DEFAULTS.stair.flight,
     flip: !!opts.flip,
+    style: opts.style ?? 'stringer',
     color: opts.color ?? COLORS.stair,
   };
 }

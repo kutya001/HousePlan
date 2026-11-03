@@ -164,22 +164,26 @@ export function openingSpans(g, openings) {
 
 /**
  * Куски стены для 3D: сплошные участки на всю высоту, а над и под проёмами — перемычки.
+ * @param opts { overlap — насколько перемычки заходят в соседние куски вдоль стены,
+ *               sink — насколько низ стены уходит вниз }. Для картинки: стыки кусков
+ *               перекрываются на миллиметры, и в щелях растеризации не «моргают»
+ *               внутренние торцы и верх стены этажа ниже. Для физики — нули.
  * @returns {Array<{poly, y0, y1}>} y — от низа стены
  */
-export function wallPieces3D(g, openings, height) {
+export function wallPieces3D(g, openings, height, { overlap = 0, sink = 0 } = {}) {
   const pieces = [];
   let cursor = -Infinity;
   for (const sp of openingSpans(g, openings)) {
-    if (sp.s0 > cursor) pieces.push({ poly: clipWallRange(g, cursor, sp.s0), y0: 0, y1: height });
+    if (sp.s0 > cursor) pieces.push({ poly: clipWallRange(g, cursor, sp.s0), y0: -sink, y1: height });
     const top = sp.o.sill + sp.o.height;
     const a = Math.max(sp.s0, cursor);
     if (sp.s1 > a) {
-      if (sp.o.sill > 0.005) pieces.push({ poly: clipWallRange(g, a, sp.s1), y0: 0, y1: Math.min(sp.o.sill, height) });
-      if (top < height - 0.005) pieces.push({ poly: clipWallRange(g, a, sp.s1), y0: top, y1: height });
+      if (sp.o.sill > 0.005) pieces.push({ poly: clipWallRange(g, a - overlap, sp.s1 + overlap), y0: -sink, y1: Math.min(sp.o.sill, height) });
+      if (top < height - 0.005) pieces.push({ poly: clipWallRange(g, a - overlap, sp.s1 + overlap), y0: top, y1: height });
     }
     cursor = Math.max(cursor, sp.s1);
   }
-  pieces.push({ poly: clipWallRange(g, cursor, Infinity), y0: 0, y1: height });
+  pieces.push({ poly: clipWallRange(g, cursor, Infinity), y0: -sink, y1: height });
   return pieces.filter((p) => p.poly.length >= 3 && p.y1 > p.y0);
 }
 

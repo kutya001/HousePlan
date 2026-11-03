@@ -11,6 +11,8 @@ import {
   ZONE_MATERIALS,
   ROOF_TYPES,
   STAIR_SHAPES,
+  STAIR_STYLES,
+  stairStyle,
   OPENING_KINDS,
   OPENING_STYLES,
   DEFAULTS,
@@ -18,6 +20,7 @@ import {
 } from './defaults.js';
 import { catalogItem } from './catalog.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
+import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
 import { wallLength } from './operations.js';
 
 const num = (key, label, opts = {}) => ({
@@ -116,6 +119,15 @@ export const SCHEMAS = {
     num('t', 'Центр от начала стены', { min: 0, max: 200 }),
     check('flipSide', 'Открывание на другую сторону'),
     check('flipHinge', 'Петли с другой стороны'),
+    {
+      type: 'select',
+      label: 'Спуск с улицы',
+      hint: 'Дверь в наружной стене подвала: приямок со ступенями от земли до пола подвала',
+      options: DESCENTS,
+      get: (o) => (DESCENTS[o.descent] ? o.descent : 'out'),
+      set: (o, v) => (o.descent = v),
+      visible: (o, p) => !!p && canHaveDescent(p, o),
+    },
   ],
   room: [
     { type: 'text', label: 'Название', list: ROOM_NAMES, get: (r) => r.name, set: (r, v) => (r.name = v) },
@@ -132,6 +144,14 @@ export const SCHEMAS = {
       },
       rebuild: true,
     }),
+    {
+      type: 'select',
+      label: 'Конструкция',
+      options: STAIR_STYLES,
+      get: (s) => stairStyle(s),
+      set: (s, v) => (s.style = v),
+      visible: (s) => s.shape !== 'spiral',
+    },
     num('width', 'Ширина', { min: 0.6, max: 6 }),
     num('length', 'Длина', { min: 0.6, max: 10, visible: (s) => s.shape !== 'spiral' }),
     num('flight', 'Ширина марша', { min: 0.6, max: 2, visible: (s) => s.shape === 'L' || s.shape === 'U' }),

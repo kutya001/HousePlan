@@ -14,9 +14,11 @@ import { porchSteps } from '../../geometry/porch.js';
 import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf } from '../../core/geometry.js';
 import { levelElevation, wallHeight, levelBelow, levelTop, groundLevel, isBasement, SITE_LEVEL } from '../../model/project.js';
 import { excavationOutlines, inExcavation } from '../../geometry/excavation.js';
+import { cellarEntries, RAIL_H } from '../../geometry/cellarEntry.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairRise3D } from '../builders/buildStructure.js';
+import { stairStyle, TREAD } from '../../model/defaults.js';
 
 /** Предметы, сквозь которые можно пройти, — только опора (ковёр) или вовсе ничего. */
 const FLAT = new Set(['rug']);
@@ -92,8 +94,11 @@ export class CollisionWorld {
       // лестницы
       for (const s of project.stairs.filter((x) => x.levelId === level.id)) {
         const lay = stairLayout(s, stairRise3D(project, s));
+        const style = stairStyle(s);
         for (const st of lay.steps) {
-          this._add(st.poly, st.thin ? base + st.top - 0.05 : base, base + st.top, { kind: 'stair', ref: { kind: 'stair', id: s.id } });
+          // открытая лестница — только проступи: под высокой частью марша можно пройти
+          const th = style === 'solid' ? st.top : st.thin ? 0.05 : st.landing ? TREAD.landing : TREAD[style];
+          this._add(st.poly, base + st.top - th, base + st.top, { kind: 'stair', ref: { kind: 'stair', id: s.id } });
         }
       }
 
@@ -109,6 +114,12 @@ export class CollisionWorld {
       this._add(z.points, 0, top, { kind: 'floor', noSide: true, ref: { kind: 'zone', id: z.id } });
     }
     for (const it of project.items.filter((x) => x.levelId === SITE_LEVEL)) this._addItem(it, 0);
+    // приямки входов в подвал: площадка и ступени — опора, стенки с ограждением — препятствия
+    for (const e of cellarEntries(project)) {
+      this._add(e.landing.poly, e.base - 0.12, e.base, { kind: 'porch', noSide: true });
+      for (const st of e.steps) this._add(st.poly, e.base - 0.12, st.top, { kind: 'porch' });
+      for (const w of e.walls) this._add(w.poly, w.y0, w.rail ? RAIL_H : w.y1, { kind: 'wall' });
+    }
     const fence = project.site.fence;
     const b = project.site.boundary;
     if (fence?.enabled && b.length > 1) {

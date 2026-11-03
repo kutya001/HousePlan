@@ -15,6 +15,11 @@ export function mat(color, opts = {}) {
       transparent: (opts.opacity ?? 1) < 1,
       opacity: opts.opacity ?? 1,
       depthWrite: (opts.opacity ?? 1) >= 1,
+      // грани чуть «отодвинуты» в буфере глубины — тонкие контуры рёбер (EdgesGeometry)
+      // рисуются поверх стабильно и не мерцают на стыках стен
+      polygonOffset: true,
+      polygonOffsetFactor: 0,
+      polygonOffsetUnits: 1,
     });
     if (opts.emissive) {
       m.emissive = new THREE.Color(opts.emissive);

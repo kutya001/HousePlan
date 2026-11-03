@@ -11,7 +11,8 @@
 import { createEmptyProject, createLevel, normalizeProject, SITE_LEVEL, getLevel } from '../model/project.js';
 import { createWall, createOpening, createRoom, createStair, createItem, createRoof, createZone } from '../model/factories.js';
 import { CATALOG, catalogItem } from '../model/catalog.js';
-import { DEFAULTS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, OPENING_STYLES } from '../model/defaults.js';
+import { DESCENTS } from '../geometry/cellarEntry.js';
+import { DEFAULTS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
 import { projectOnSegment, dist } from '../core/geometry.js';
@@ -58,7 +59,7 @@ export function toExchange(project) {
       rooms: project.rooms.filter((r) => r.levelId === level.id).map((r) => ({ name: r.name, floor: r.floor, points: r.points.map(pt) })),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
-        .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}) })),
+        .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}) })),
       furniture: project.items.filter((it) => it.levelId === level.id).map(itemOut),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
@@ -76,6 +77,7 @@ export function toExchange(project) {
         ...(o.kind === 'window' ? { sill: r3(o.sill) } : {}),
         ...(o.flipSide ? { flipSide: true } : {}),
         ...(o.flipHinge ? { flipHinge: true } : {}),
+        ...(o.descent && o.descent !== 'out' ? { descent: o.descent } : {}),
       });
     }
     out.levels.push(lv);
@@ -344,6 +346,7 @@ function importLevel(project, lvl, l, k, warnings) {
         sill: kind === 'window' ? clamp(num(o.sill, def.sill / k) * k, 0, 3) : 0,
         flipSide: !!o.flipSide,
         flipHinge: !!o.flipHinge,
+        ...(DESCENTS[o.descent] ? { descent: o.descent } : {}),
       }),
     );
   }
@@ -367,6 +370,7 @@ function importLevel(project, lvl, l, k, warnings) {
     if (s.length) st.length = clamp(num(s.length, 3.6) * k, 0.5, 10);
     if (s.flight) st.flight = clamp(num(s.flight, 1) * k, 0.5, 2);
     st.flip = !!s.flip;
+    if (STAIR_STYLES[s.style]) st.style = s.style;
     project.stairs.push(st);
   }
   for (const it of l.furniture || l.items || []) addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings);

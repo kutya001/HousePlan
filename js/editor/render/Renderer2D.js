@@ -17,6 +17,7 @@ import { drawRoofs } from './drawRoofs.js';
 import { drawDimensions } from './drawDimensions.js';
 import { drawSelection } from './drawSelection.js';
 import { drawIssues } from './drawIssues.js';
+import { drawOutdoorSteps } from './drawOutdoorSteps.js';
 import { isGroundLevel, levelBelow } from '../../model/project.js';
 
 export class Renderer2D {
@@ -68,6 +69,7 @@ export class Renderer2D {
     if (!exportMode) drawGrid(ctx, this);
     drawSite(ctx, this);
     if (this.ground) drawSiteItems(ctx, this);
+    drawOutdoorSteps(ctx, this);
     drawRooms(ctx, this);
     drawAtticLow(ctx, this);
     const below = levelBelow(this.project, levelId);

@@ -37,7 +37,8 @@ export function buildOpening(g, o, base, wallH) {
     for (let i = 1; i < parts; i++) frame.push(box(0.05, H - 2 * fw, fd * 0.9, -w / 2 + (w / parts) * i, y0 + fw, 0));
     glass.push(box(w - 2 * fw, H - 2 * fw, 0.012, 0, y0 + fw, 0));
     // подоконник с двух сторон
-    if (o.sill > 0.2) frame.push(box(w + 0.08, 0.03, T + 0.1, 0, y0 - 0.03, 0));
+    // верх доски на 4 мм выше низа проёма — иначе совпадает с верхом стены под окном и мерцает
+    if (o.sill > 0.2) frame.push(box(w + 0.08, 0.034, T + 0.1, 0, y0 - 0.03, 0));
   } else if (o.kind === 'door') {
     const fd = Math.min(0.12, T * 0.8);
     const sgn = o.flipSide ? -1 : 1;

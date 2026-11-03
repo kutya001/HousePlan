@@ -46,7 +46,7 @@ export function buildWalls(project, levelId, base, { plinth = false, porch = fal
     const w = g.wall;
     const h = wallHeight(project, w);
     const ops = byWall.get(w.id) || [];
-    const parts = wallPieces3D(g, ops, h).map((p) => piece(p.poly, base + p.y0, base + p.y1));
+    const parts = wallPieces3D(g, ops, h, { overlap: 0.004 }).map((p) => piece(p.poly, base + p.y0, base + p.y1));
     const geo = mergeGeometries(parts);
     if (geo) {
       const underground = isBasement(level) && w.kind === 'exterior';

@@ -1,10 +1,11 @@
 /**
- * Котлован под подвалом: контуры, где грунта нет (вырез в земле в 3D,
- * опора для манекена — дно подвала, а не земля).
+ * Котлован под подвалом и приямки входов с улицы: контуры, где грунта нет
+ * (вырез в земле в 3D, опора для манекена — дно подвала или ступени, а не земля).
  */
 import { levelFootprints } from './roomDetect.js';
 import { pointInPolygon, polygonArea } from '../core/geometry.js';
 import { isBasement } from '../model/project.js';
+import { cellarEntries } from './cellarEntry.js';
 
 export function excavationOutlines(project) {
   const all = [];
@@ -19,6 +20,8 @@ export function excavationOutlines(project) {
     const overlaps = out.some((q) => poly.some((p) => pointInPolygon(p, q)) || q.some((p) => pointInPolygon(p, poly)));
     if (!overlaps) out.push(poly);
   }
+  // приямки входов в подвал с улицы
+  for (const e of cellarEntries(project)) out.push(e.hole);
   return out;
 }
 

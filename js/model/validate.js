@@ -14,8 +14,10 @@ import { computeWallGeometry, wallPieces3D, clipWallRange, pointOnWall } from '.
 import { stairLayout } from '../geometry/stairGeometry.js';
 import { levelFootprints } from '../geometry/roomDetect.js';
 import { porchSteps, outsideSide } from '../geometry/porch.js';
+import { cellarEntries } from '../geometry/cellarEntry.js';
 import { rectCorners, circlePolygon, pointInPolygon, polygonArea, polygonSignedArea, clipPolygonHalfPlane, bboxOf, dist, add, mul, segmentIntersect } from '../core/geometry.js';
 import { catalogItem } from './catalog.js';
+import { stairStyle, TREAD } from './defaults.js';
 import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, wallHeight, isBasement } from './project.js';
 
 const OPENING_LABEL = { door: 'Дверь', window: 'Окно', arch: 'Проём', opening: 'Проём' };
@@ -216,7 +218,13 @@ export function checkProject(project) {
       .map((s) => {
         const lvl = getLevel(project, s.levelId);
         const lay = stairLayout(s, lvl ? levelWallHeight(lvl) : 3);
-        return { s, steps: lay.steps.map((st) => ccw(st.poly)), outline: lay.outline };
+        const style = stairStyle(s);
+        // высоты низа и верха каждой ступени: у открытой лестницы под маршем пусто
+        const spans = lay.steps.map((st) => {
+          const th = style === 'solid' ? st.top : st.thin ? 0.05 : st.landing ? TREAD.landing : TREAD[style];
+          return { poly: ccw(st.poly), y0: st.top - th, y1: st.top };
+        });
+        return { s, steps: spans.map((x) => x.poly), spans, outline: lay.outline };
       });
 
   for (const level of project.levels) {
@@ -288,6 +296,7 @@ export function checkProject(project) {
   }
 
   checkSite(project, ground, geomsOf, push);
+  checkCellarEntries(project, ground, push);
 
   const rank = { error: 0, warn: 1 };
   return issues.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -403,7 +412,8 @@ function checkItemsStairs(items, shapes, stairs, holes, lid, push) {
     if (SOFT.has(it.type)) continue;
     const sh = shapes.get(it.id);
     for (const st of stairs) {
-      const r = deepest(sh.parts, st.steps);
+      // под открытым маршем можно поставить шкаф или кладовку — если он ниже ступеней
+      const r = deepest(sh.parts, stepsBetween(st, sh.y0, sh.y1 + 0.02));
       if (r && r.depth > TOL) {
         push({
           id: `is:${it.id}:${st.s.id}`,
@@ -438,13 +448,18 @@ function checkItemsStairs(items, shapes, stairs, holes, lid, push) {
   }
 }
 
+/** Ступени лестницы, занимающие высоты [y0, y1] над полом этажа. */
+function stepsBetween(st, y0, y1) {
+  return st.spans.filter((x) => x.y0 < y1 && x.y1 > y0).map((x) => x.poly);
+}
+
 /** Лестницы в стенах и друг в друге. */
 function checkStairs(stairs, geoms, openingsByWall, project, lid, push) {
   for (const st of stairs) {
     for (const g of geoms.values()) {
       const pieces = wallPieces3D(g, openingsByWall.get(g.wall.id) || [], wallHeight(project, g.wall)).filter((p) => p.y0 < 0.3);
       const r = deepest(
-        st.steps,
+        stepsBetween(st, 0, 0.3),
         pieces.map((p) => ccw(hull(p.poly))),
       );
       if (r && r.depth > TOL) {
@@ -528,7 +543,7 @@ function checkDoors(project, level, geoms, rooms, items, shapes, stairs, lid, pu
         }
         if (!outside) {
           for (const st of stairs) {
-            const r = deepest(st.steps, [zone]);
+            const r = deepest(stepsBetween(st, 0, 2.0), [zone]);
             if (r && r.depth > 0.08) {
               push({
                 id: `doorst:${o.id}:${st.s.id}`,
@@ -814,6 +829,87 @@ function checkSite(project, ground, geomsOf, push) {
         at: { x: it.x, y: it.y },
         area: sh.outline,
       });
+    }
+  }
+}
+
+/** Приямки входов в подвал: не под домом, не под крыльцом, без вещей внутри. */
+function checkCellarEntries(project, ground, push) {
+  const entries = cellarEntries(project);
+  if (!entries.length) return;
+  const groundWalls = ground ? project.walls.filter((w) => w.levelId === ground.id) : [];
+  const fps = groundWalls.length && ground && !isBasement(ground) ? levelFootprints(groundWalls) : [];
+  const gGeoms = ground ? computeWallGeometry(groundWalls) : new Map();
+  const base = ground ? levelElevation(project, ground.id) : 0;
+  const porch = ground ? porchSteps(project, ground.id, gGeoms, base).map((st) => ccw(st.poly)) : [];
+  const items = project.items.filter((it) => it.levelId === SITE_LEVEL && !SOFT.has(it.type));
+  for (const e of entries) {
+    const pit = ccw(e.pit);
+    const zone = ccw(hull([...e.pit, ...e.walls.flatMap((w) => w.poly)]));
+    for (const fp of fps) {
+      const cut = clipByConvex(fp, pit);
+      if (cut.length >= 3 && polygonArea(cut) > 0.05) {
+        push({
+          id: `ph:${e.openingId}`,
+          level: 'error',
+          title: 'Приямок входа в подвал — под домом',
+          text: 'Первый этаж нависает над спуском в подвал. Перенесите дверь подвала или выберите спуск вдоль стены.',
+          levelId: SITE_LEVEL,
+          refs: [{ kind: 'opening', id: e.openingId }],
+          at: centroidOf(cut),
+          area: cut,
+        });
+        break;
+      }
+    }
+    const pr = deepest([zone], porch);
+    if (pr && pr.depth > TOL) {
+      push({
+        id: `pp:${e.openingId}`,
+        level: 'error',
+        title: 'Крыльцо и спуск в подвал накладываются',
+        text: 'Ступени крыльца входной двери попадают в приямок подвала — разнесите двери.',
+        levelId: SITE_LEVEL,
+        refs: [{ kind: 'opening', id: e.openingId }],
+        at: centroidOf(pit),
+        area: pit,
+      });
+    }
+    for (const it of items) {
+      const sh = itemShape(it);
+      const r = deepest(sh.parts.map(ccw), [zone]);
+      if (r && r.depth > TOL) {
+        push({
+          id: `pi:${e.openingId}:${it.id}`,
+          level: 'error',
+          title: `${itemName(it)} стоит в приямке подвала`,
+          text: 'Спуск к двери подвала загорожен.',
+          levelId: SITE_LEVEL,
+          refs: [{ kind: 'item', id: it.id }],
+          at: { x: it.x, y: it.y },
+          area: sh.outline,
+          fix: { label: 'Отодвинуть', kind: 'move', itemId: it.id, dx: r.axis.x * (r.depth + 0.1), dy: r.axis.y * (r.depth + 0.1) },
+        });
+      }
+    }
+    for (const other of entries) {
+      if (other === e || other.openingId < e.openingId) continue;
+      const r = deepest([pit], [ccw(other.pit)]);
+      if (r && r.depth > TOL) {
+        push({
+          id: `pq:${e.openingId}:${other.openingId}`,
+          level: 'error',
+          title: 'Два спуска в подвал накладываются',
+          text: 'Приямки соседних дверей заходят друг в друга.',
+          levelId: SITE_LEVEL,
+          refs: [
+            { kind: 'opening', id: e.openingId },
+            { kind: 'opening', id: other.openingId },
+          ],
+          at: centroidOf(pit),
+          area: pit,
+        });
+      }
     }
   }
 }

@@ -69,6 +69,22 @@ export const STAIR_SHAPES = {
   spiral: 'Винтовая',
 };
 
+/** Конструкция лестницы: как выглядит марш и что под ним. */
+export const STAIR_STYLES = {
+  stringer: 'На косоурах — открытые ступени',
+  floating: 'Консольная — парящие ступени',
+  solid: 'Монолитная — сплошная под маршем',
+};
+
+/** Конструкция лестницы (у старых проектов поля нет — открытая на косоурах). */
+export function stairStyle(s) {
+  if (s?.shape === 'spiral') return 'floating';
+  return STAIR_STYLES[s?.style] ? s.style : 'stringer';
+}
+
+/** Толщина проступи для открытых лестниц (у монолитной ступень — до пола). */
+export const TREAD = { stringer: 0.045, floating: 0.07, landing: 0.14 };
+
 export const OPENING_STYLES = {
   door: {
     single: 'Одностворчатая',
