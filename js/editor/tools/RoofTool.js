@@ -7,7 +7,7 @@ import { THEME } from '../render/theme.js';
 import { drawSnapIndicator } from '../Snapper.js';
 import { createRoof } from '../../model/factories.js';
 import { ROOF_TYPES, DEFAULTS } from '../../model/defaults.js';
-import { autoRoofRect } from '../../model/operations.js';
+import { setAutoRoofs } from '../../model/operations.js';
 import { fmtLen } from '../../core/format.js';
 
 export class RoofTool extends Tool {
@@ -37,20 +37,20 @@ export class RoofTool extends Tool {
     this.render();
   }
 
+  /** По контуру этажа: у Г-, Т-, П-образного дома — несколько крыш, сходящихся ендовами. */
   auto() {
-    const rect = autoRoofRect(this.project, this.levelId);
-    if (!rect) {
+    if (!this.project.walls.some((w) => w.levelId === this.levelId)) {
       this.toast('На этом этаже нет стен — крыше не на что опереться', 'warn');
       return;
     }
-    let id;
-    this.store.commit((p) => {
-      const roof = createRoof(this.levelId, rect.x, rect.y, rect.w, rect.d, { ...this.settings, rotation: rect.rotation });
-      id = roof.id;
-      p.roofs.push(roof);
-    });
-    this.state.select({ kind: 'roof', id });
-    this.toast(`Крыша ${fmtLen(rect.w)} × ${fmtLen(rect.d)}`);
+    const had = this.project.roofs.some((r) => r.levelId === this.levelId);
+    let made = [];
+    this.store.commit((p) => (made = setAutoRoofs(p, this.levelId, { ...this.settings })));
+    if (!made.length) return;
+    this.state.setSelection(made.map((r) => ({ kind: 'roof', id: r.id })));
+    const r = made[0];
+    const text = made.length > 1 ? `Крыша из ${made.length} частей по контуру этажа` : `Крыша ${fmtLen(r.w)} × ${fmtLen(r.d)}`;
+    this.toast(had ? `${text} — прежняя заменена` : text, 'info', { action: { label: 'Отменить', onClick: () => this.app.commands.undo() } });
   }
 
   _snap(e) {

@@ -606,6 +606,24 @@ const SYMBOLS = {
     circle(ctx, w * 0.25, d * 0.22, Math.min(w, d) * 0.14);
     ctx.stroke();
   },
+  roof_window(ctx, w, d) {
+    // рама, стекло и стрелка вниз по скату
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    fs(ctx);
+    const prev = ctx.fillStyle;
+    ctx.fillStyle = 'rgba(120, 175, 215, 0.55)';
+    ctx.beginPath();
+    ctx.rect(-w / 2 + 0.07, -d / 2 + 0.07, w - 0.14, d - 0.14);
+    fs(ctx);
+    ctx.fillStyle = prev;
+    line(ctx, 0, -d / 2 + 0.2, 0, d / 2 - 0.2);
+    ctx.beginPath();
+    ctx.moveTo(-0.12, d / 2 - 0.34);
+    ctx.lineTo(0, d / 2 - 0.2);
+    ctx.lineTo(0.12, d / 2 - 0.34);
+    ctx.stroke();
+  },
   well(ctx, w) {
     circle(ctx, 0, 0, w / 2);
     fs(ctx);

@@ -20,6 +20,7 @@ import {
 } from './defaults.js';
 import { catalogItem } from './catalog.js';
 import { LAYERS, itemLayer } from './layers.js';
+import { roofSurfaceAt, slopeAngle } from '../geometry/roofSurface.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
 import { RAILINGS } from '../geometry/stairRails.js';
@@ -182,8 +183,15 @@ export const SCHEMAS = {
     rotation,
     posX,
     posY,
-    num('elevation', 'Над полом', { min: 0, max: 5, visible: (i) => !catalogItem(i.type)?.ceiling }),
+    num('elevation', 'Над полом', { min: 0, max: 5, visible: (i) => !catalogItem(i.type)?.ceiling && !catalogItem(i.type)?.roofMount }),
     { ...readonly('Высота', () => 'под потолком'), visible: (i) => !!catalogItem(i.type)?.ceiling },
+    {
+      ...readonly('Положение', (i, p) => {
+        const s = roofSurfaceAt(p, i.levelId, i);
+        return s ? `в скате крыши, уклон ${Math.round(slopeAngle(s))}°` : 'не на крыше — передвиньте на скат';
+      }),
+      visible: (i) => !!catalogItem(i.type)?.roofMount,
+    },
     { ...readonly('Слой', (i) => LAYERS.find(([k]) => k === itemLayer(i))?.[1]), visible: (i) => catalogItem(i.type)?.category === 'mep' },
     color('color', 'Цвет'),
   ],

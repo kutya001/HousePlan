@@ -134,6 +134,23 @@ const B = {
     for (const sy of [0.15, 0.85]) add(box(0.03, 0.03, d * 0.6, -w / 2 + 0.02, h * sy, -d * 0.2), METAL);
   },
 
+  roof_window(add, w, d, h, c) {
+    // рама над кровлей, откос сквозь толщину крыши и стекло снаружи и изнутри
+    const f = 0.07;
+    add(box(w, 0.08, f, 0, 0, -d / 2 + f / 2), c);
+    add(box(w, 0.08, f, 0, 0, d / 2 - f / 2), c);
+    add(box(f, 0.08, d - 2 * f, -w / 2 + f / 2, 0, 0), c);
+    add(box(f, 0.08, d - 2 * f, w / 2 - f / 2, 0, 0), c);
+    add(box(w - 0.02, 0.012, d - 0.02, 0, 0.08, 0), lighten(c));
+    add(box(w - 2 * f, 0.01, d - 2 * f, 0, 0.05, 0), null, { glass: true });
+    const lin = '#ece8e1';
+    add(box(w, 0.32, 0.03, 0, -0.32, -d / 2 + 0.015), lin);
+    add(box(w, 0.32, 0.03, 0, -0.32, d / 2 - 0.015), lin);
+    add(box(0.03, 0.32, d, -w / 2 + 0.015, -0.32, 0), lin);
+    add(box(0.03, 0.32, d, w / 2 - 0.015, -0.32, 0), lin);
+    add(box(w - 0.06, 0.01, d - 0.06, 0, -0.3, 0), null, { glass: true });
+  },
+
   balcony(add, w, d, h, c) {
     // плита-консоль вровень с полом этажа и ограждение с трёх сторон
     add(box(w, 0.16, d, 0, -0.16, 0), c);
@@ -549,7 +566,7 @@ function darken(hex) {
  * Модель объекта. Детали одного цвета объединяются в одну геометрию.
  * @returns {THREE.Group}
  */
-export function buildItem(item, baseY, elevation = item.elevation || 0) {
+export function buildItem(item, baseY, elevation = item.elevation || 0, tilt = null) {
   const parts = new Map();
   const add = (geom, color, opts = {}) => {
     const key = opts.glass ? 'glass' : opts.glow ? 'glow' : `${color || item.color}|${opts.opacity ?? 1}`;
@@ -567,6 +584,13 @@ export function buildItem(item, baseY, elevation = item.elevation || 0) {
   }
   group.position.set(item.x, baseY + elevation, item.y);
   group.rotation.y = -(item.rotation || 0) * DEG;
+  // мансардное окно ложится в плоскость ската h = a·x + b·y + c при любом повороте
+  if (tilt) {
+    const n = new THREE.Vector3(-tilt.a, 1, -tilt.b).normalize();
+    const align = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+    const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -(item.rotation || 0) * DEG);
+    group.quaternion.copy(align.multiply(yaw));
+  }
   group.userData.ref = { kind: 'item', id: item.id };
   return group;
 }

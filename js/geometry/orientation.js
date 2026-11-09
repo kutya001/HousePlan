@@ -5,6 +5,8 @@
 import { computeWallGeometry, pointOnWall } from './wallGeometry.js';
 import { pointInPolygon } from '../core/geometry.js';
 import { siteGeo, vectorAzimuth, compassPoint } from './sun.js';
+import { catalogItem } from '../model/catalog.js';
+import { roofSurfaceAt } from './roofSurface.js';
 
 /** Список сторон света (по порядку обхода С→СЗ) для окон комнаты. */
 export function roomWindowDirections(project, room) {
@@ -22,6 +24,12 @@ export function roomWindowDirections(project, room) {
       // окно смотрит от комнаты наружу
       found.add(compassPoint(vectorAzimuth({ x: -g.n.x * side, y: -g.n.y * side }, north)));
     }
+  }
+  // мансардные окна смотрят вниз по скату
+  for (const it of project.items) {
+    if (it.levelId !== room.levelId || !catalogItem(it.type)?.roofMount || !pointInPolygon(it, room.points)) continue;
+    const surf = roofSurfaceAt(project, room.levelId, it);
+    if (surf && Math.hypot(surf.a, surf.b) > 1e-6) found.add(compassPoint(vectorAzimuth({ x: -surf.a, y: -surf.b }, north)));
   }
   const order = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
   return order.filter((p) => found.has(p));

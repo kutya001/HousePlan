@@ -3,9 +3,9 @@
  * Каждая команда — один шаг истории.
  */
 import { getEntity, removeEntity, removeLevel, levelIndex, createEmptyProject, normalizeProject, SITE_LEVEL, groundLevel } from '../model/project.js';
-import { duplicateEntities, autoRoofRect, splitRoomInHalf, addBasementLevel, addAtticLevel, addFloorLevel } from '../model/operations.js';
+import { duplicateEntities, setAutoRoofs, splitRoomInHalf, addBasementLevel, addAtticLevel, addFloorLevel } from '../model/operations.js';
 import { fmtLen } from '../core/format.js';
-import { createRoom, createRoof } from '../model/factories.js';
+import { createRoom } from '../model/factories.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { pointInPolygon, polygonLabelPoint, normalizeDeg, rotate, DEG, bboxOf } from '../core/geometry.js';
 import { buildHousePreset, HOUSE_PRESETS } from '../model/presets.js';
@@ -271,12 +271,16 @@ export class Commands {
     this.app.toast(`Комнаты: новых ${created}, обновлено ${updated}`);
   }
 
+  /** Крыша по контуру верхнего этажа: у Г- и Т-образного дома — главный объём и крылья. */
   autoRoof(type = 'gable') {
     const levels = this.project.levels;
     const top = levels[levels.length - 1];
-    const rect = autoRoofRect(this.project, top.id);
-    if (!rect) return this.app.toast('Нет стен для крыши', 'warn');
-    this.store.commit((p) => p.roofs.push(createRoof(top.id, rect.x, rect.y, rect.w, rect.d, { type, rotation: rect.rotation })));
+    const had = this.project.roofs.some((r) => r.levelId === top.id);
+    let made = [];
+    this.store.commit((p) => (made = setAutoRoofs(p, top.id, { type })));
+    if (!made.length) return this.app.toast('Нет стен для крыши', 'warn');
+    const msg = made.length > 1 ? `Крыша по контуру: ${made.length} ската-объёма сходятся ендовами` : 'Крыша по контуру этажа';
+    this.app.toast(had ? `${msg} — прежняя заменена` : msg, 'info', this._undoAction());
   }
 
   // ── Проект ─────────────────────────────────────────────────────────────

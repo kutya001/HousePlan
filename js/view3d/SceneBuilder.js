@@ -3,13 +3,17 @@
  * для домов из сотен объектов это быстро и избавляет от рассинхронизации.
  */
 import * as THREE from 'three';
-import { levelElevation, levelIndex, SITE_LEVEL, groundLevel } from '../model/project.js';
+import { levelElevation, levelIndex, SITE_LEVEL, groundLevel, levelWallHeight } from '../model/project.js';
+
+const levelWallHeightOf = (project, level) => levelWallHeight(level);
 import { buildSite } from './builders/buildSite.js';
 import { buildWalls } from './builders/buildWalls.js';
 import { buildFloors, buildStairs, buildStairGuards, buildRoof } from './builders/buildStructure.js';
 import { buildItem } from './builders/buildItems.js';
 import { edgeMaterial } from './materials.js';
 import { itemVisible, itemElevation } from '../model/layers.js';
+import { catalogItem } from '../model/catalog.js';
+import { roofSurfaceAt } from '../geometry/roofSurface.js';
 
 /**
  * Строим все этажи и крыши; «разрез» по активному этажу — это просто видимость
@@ -27,6 +31,7 @@ export function buildScene(project, opts) {
   for (const it of project.items.filter((i) => i.levelId === SITE_LEVEL && shown(i))) root.add(buildItem(it, 0));
 
   const ground = groundLevel(project);
+  const roofItems = [];
   project.levels.forEach((level, i) => {
     const base = levelElevation(project, level.id);
     const g = new THREE.Group();
@@ -35,11 +40,23 @@ export function buildScene(project, opts) {
     g.add(buildWalls(project, level.id, base, { plinth: i === 0, porch: level === ground }));
     g.add(buildStairs(project, level.id, base));
     g.add(buildStairGuards(project, level.id, base));
-    for (const it of project.items.filter((x) => x.levelId === level.id && shown(x))) g.add(buildItem(it, base, itemElevation(project, it)));
+    for (const it of project.items.filter((x) => x.levelId === level.id && shown(x))) {
+      if (catalogItem(it.type)?.roofMount) {
+        // мансардное окно — в плоскости ската (крыши может не быть — тогда на перекрытии)
+        const surf = roofSurfaceAt(project, level.id, it);
+        const gr = surf ? buildItem(it, 0, surf.h + 0.005, surf) : buildItem(it, base, levelWallHeightOf(project, level));
+        // в разрезе прячется вместе с крышей
+        gr.userData.levelIndex = i;
+        gr.userData.isRoof = !!surf;
+        if (surf) roofItems.push(gr);
+        else g.add(gr);
+      } else g.add(buildItem(it, base, itemElevation(project, it)));
+    }
     g.userData.levelIndex = i;
     root.add(g);
   });
 
+  for (const gr of roofItems) if (opts.roofs) root.add(gr);
   if (opts.roofs) {
     for (const roof of project.roofs) {
       const idx = levelIndex(project, roof.levelId);

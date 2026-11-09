@@ -188,6 +188,7 @@ export class CollisionWorld {
   _addItem(it, base) {
     // розетки, светильники, выводы труб — сквозь них манекен проходит
     if (catalogItem(it.type)?.category === 'mep' && it.type !== 'water_heater' && it.type !== 'el_panel') return;
+    if (catalogItem(it.type)?.roofMount) return; // мансардное окно — в кровле
     const y0 = base + (it.elevation || 0);
     const ref = { kind: 'item', id: it.id };
     if (TRUNK.has(it.type)) {

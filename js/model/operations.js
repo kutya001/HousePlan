@@ -3,8 +3,9 @@
  * Функции меняют переданный project и не знают об интерфейсе — их вызывают
  * инструменты, команды и пресеты (внутри store.commit).
  */
+import { autoRoofRects } from '../geometry/roofAuto.js';
 import { uid } from '../core/ids.js';
-import { DEG, dist, projectOnSegment, toLocal, toWorld, bboxOf, polygonSignedArea, polygonArea, pointInPolygon, polygonLabelPoint } from '../core/geometry.js';
+import { dist, projectOnSegment, polygonSignedArea, polygonArea, pointInPolygon, polygonLabelPoint } from '../core/geometry.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { createWall, createRoom, createOpening, createRoof } from './factories.js';
 import { createLevel, getLevel, levelIndex, COLLECTION, getEntity, SITE_LEVEL, isBasement, isAttic, renumberLevels } from './project.js';
@@ -134,8 +135,7 @@ export function addAtticLevel(project, { pitch = 40, knee = 1.2 } = {}) {
     moved++;
   }
   if (!moved) {
-    const rect = autoRoofRect(project, lvl.id);
-    if (rect) project.roofs.push(createRoof(lvl.id, rect.x, rect.y, rect.w, rect.d, { type: 'gable', rotation: rect.rotation, pitch }));
+    setAutoRoofs(project, lvl.id, { type: 'gable', pitch });
   }
   return lvl;
 }
@@ -176,38 +176,17 @@ export function copyLevelLayout(project, fromLevelId, toLevelId, { exteriorOnly 
 }
 
 /**
- * Прямоугольник крыши по наружным стенам этажа: ориентирован по самой длинной стене,
- * ширина — по длинной стороне (конёк вдоль дома).
+ * Крыши по контуру этажа (Г-, Т-, П-образный дом — несколько пересекающихся).
+ * Старые крыши этажа заменяются.
+ * @returns созданные крыши
  */
-export function autoRoofRect(project, levelId) {
-  const walls = project.walls.filter((w) => w.levelId === levelId && w.kind === 'exterior');
-  const src = walls.length ? walls : project.walls.filter((w) => w.levelId === levelId);
-  if (!src.length) return null;
-  let longest = src[0];
-  for (const w of src) if (wallLength(w) > wallLength(longest)) longest = w;
-  const ang = Math.atan2(longest.y2 - longest.y1, longest.x2 - longest.x1) / DEG;
-  const rot = ((ang % 90) + 90) % 90;
-  const pts = [];
-  for (const w of src) {
-    const h = w.thickness / 2;
-    for (const p of [
-      { x: w.x1, y: w.y1 },
-      { x: w.x2, y: w.y2 },
-    ]) {
-      const l = toLocal(p, 0, 0, rot);
-      pts.push({ x: l.x - h, y: l.y - h }, { x: l.x + h, y: l.y + h });
-    }
-  }
-  const bb = bboxOf(pts);
-  const c = toWorld({ x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 }, 0, 0, rot);
-  let w = bb.w;
-  let d = bb.h;
-  let rotation = rot;
-  if (d > w) {
-    [w, d] = [d, w];
-    rotation = rot + 90;
-  }
-  return { x: c.x, y: c.y, w, d, rotation: Math.round(rotation * 100) / 100 };
+export function setAutoRoofs(project, levelId, opts = {}) {
+  const rects = autoRoofRects(project, levelId);
+  if (!rects.length) return [];
+  project.roofs = project.roofs.filter((r) => r.levelId !== levelId);
+  const out = rects.map((r) => createRoof(levelId, r.x, r.y, r.w, r.d, { ...opts, rotation: r.rotation }));
+  project.roofs.push(...out);
+  return out;
 }
 
 export function wallLength(w) {

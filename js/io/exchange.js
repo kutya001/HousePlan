@@ -8,6 +8,7 @@
  * Текст может прийти прямо из чата: JSON ищется в блоке ```json, лишние
  * запятые и комментарии убираются, мелкие неточности геометрии чинятся.
  */
+import { roofSurfaceAt, slopeRotation } from '../geometry/roofSurface.js';
 import { createEmptyProject, createLevel, normalizeProject, SITE_LEVEL, getLevel } from '../model/project.js';
 import { createWall, createOpening, createRoom, createStair, createItem, createRoof, createZone } from '../model/factories.js';
 import { CATALOG, catalogItem } from '../model/catalog.js';
@@ -280,6 +281,14 @@ export function fromExchange(data) {
   if (!project.roofs.length && project.walls.length) warnings.push('Крыши нет — её можно поставить инструментом «Крыша» → «По контуру этажа»');
   const p = normalizeProject(project);
   healProject(p, warnings);
+  // мансардные окна — по скату, как бы их ни повернули
+  for (const it of p.items) {
+    if (!catalogItem(it.type)?.roofMount) continue;
+    const s = roofSurfaceAt(p, it.levelId, it);
+    const r = s && slopeRotation(s);
+    if (r != null) it.rotation = Math.round(r * 10) / 10;
+    else warnings.push('Мансардное окно стоит не над скатом крыши своего этажа');
+  }
   return { project: p, warnings, format: 'ai' };
 }
 

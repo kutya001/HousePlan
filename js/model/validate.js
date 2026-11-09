@@ -18,8 +18,9 @@ import { cellarEntries } from '../geometry/cellarEntry.js';
 import { rectCorners, circlePolygon, pointInPolygon, polygonArea, polygonSignedArea, clipPolygonHalfPlane, bboxOf, dist, add, mul, segmentIntersect, projectOnSegment, polygonLabelPoint } from '../core/geometry.js';
 import { catalogItem } from './catalog.js';
 import { stairStyle, TREAD } from './defaults.js';
-import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, levelAbove, wallHeight, isBasement } from './project.js';
+import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, levelAbove, wallHeight, isBasement, isAttic } from './project.js';
 import { roomWindowDirections } from '../geometry/orientation.js';
+import { roofSurfaceAt } from '../geometry/roofSurface.js';
 
 const OPENING_LABEL = { door: 'Дверь', window: 'Окно', arch: 'Проём', opening: 'Проём' };
 
@@ -233,7 +234,8 @@ export function checkProject(project) {
     const lid = level.id;
     const geoms = geomsOf(lid);
     // инженерия (розетки, светильники, выводы, радиаторы) живёт на стенах и потолке — в столкновениях не участвует
-    const items = project.items.filter((it) => it.levelId === lid && catalogItem(it.type)?.category !== 'mep');
+    const items = project.items.filter((it) => it.levelId === lid && catalogItem(it.type)?.category !== 'mep' && !catalogItem(it.type)?.roofMount);
+    checkRoofWindows(project, lid, push);
     const rooms = project.rooms.filter((r) => r.levelId === lid);
     const stairs = stairsOf(lid);
     const below = levelBelow(project, lid);
@@ -247,6 +249,7 @@ export function checkProject(project) {
     checkStairs(stairs, geoms, openingsByWall, project, lid, push);
     checkDoors(project, level, geoms, rooms, items, shapes, stairs, lid, push, ground);
     checkOpenings(project, geoms, openingsByWall, lid, push);
+    checkAtticOpenings(project, level, geoms, openingsByWall, lid, push);
     checkWallsDuplicate(geoms, lid, push);
     checkWallCrossings(geoms, lid, push);
     checkBuildings(project, lid, push);
@@ -605,6 +608,34 @@ function checkDoors(project, level, geoms, rooms, items, shapes, stairs, lid, pu
 }
 
 /** Проёмы: накладываются, выходят за стену, выше стены. */
+/** Мансарда: дверь или окно у «колена» упирается в скат (верх проёма выше низа кровли). */
+function checkAtticOpenings(project, level, geoms, openingsByWall, lid, push) {
+  if (!isAttic(level) || !project.roofs.some((r) => r.levelId === lid)) return;
+  const base = levelElevation(project, lid);
+  for (const g of geoms.values()) {
+    for (const o of openingsByWall.get(g.wall.id) || []) {
+      const top = base + (o.kind === 'door' || o.kind === 'arch' ? 0 : o.sill || 0) + o.height;
+      for (const t of [o.t - o.width / 2, o.t + o.width / 2]) {
+        const p = pointOnWall(g, Math.max(0, Math.min(g.len, t)));
+        const s = roofSurfaceAt(project, lid, p);
+        // стена мансарды обрезана чуть ниже ската; над проёмом нужна перемычка ~0.2 м
+        if (!s || s.h - 0.2 >= top) continue;
+        const label = OPENING_LABEL[o.kind] || 'Проём';
+        push({
+          id: `oroof:${o.id}`,
+          level: 'warn',
+          title: `${label} упирается в скат крыши`,
+          text: `Над краем проёма не остаётся места под скатом (не хватает ${Math.max(1, Math.round((top - s.h + 0.2) * 100))} см). Сдвиньте проём ближе к коньку или сделайте ниже.`,
+          levelId: lid,
+          refs: [{ kind: 'opening', id: o.id }],
+          at: p,
+        });
+        break;
+      }
+    }
+  }
+}
+
 function checkOpenings(project, geoms, openingsByWall, lid, push) {
   for (const g of geoms.values()) {
     const ops = (openingsByWall.get(g.wall.id) || []).slice().sort((a, b) => a.t - b.t);
@@ -954,6 +985,28 @@ function checkCellarEntries(project, ground, push) {
 
 // ── Удобство планировки ──────────────────────────────────────────────────
 
+/** Мансардное окно должно лежать в скате крыши своего этажа. */
+function checkRoofWindows(project, lid, push) {
+  for (const it of project.items) {
+    if (it.levelId !== lid || !catalogItem(it.type)?.roofMount) continue;
+    if (roofSurfaceAt(project, lid, it)) continue;
+    push({
+      id: `roofwin:${it.id}`,
+      level: 'warn',
+      title: 'Мансардное окно не на крыше',
+      text: 'Над этим местом нет ската крыши этого этажа. Передвиньте окно на скат или поставьте крышу.',
+      levelId: lid,
+      refs: [{ kind: 'item', id: it.id }],
+      at: { x: it.x, y: it.y },
+    });
+  }
+}
+
+/** Мансардные окна над комнатой (в скате над её полом). */
+function roofWindowsOver(project, room) {
+  return project.items.filter((it) => it.levelId === room.levelId && catalogItem(it.type)?.roofMount && pointInPolygon(it, room.points));
+}
+
 const LIVING = /гостин|спальн|детск|кабинет|зал\b|^зал|кухн|столов/i;
 const BEDROOM = /спальн|детск/i;
 const CORRIDOR = /коридор|холл|прихож/i;
@@ -1034,7 +1087,7 @@ function checkComfort(project, level, geoms, rooms, stairs, lid, push) {
   };
   for (const r of rooms) {
     const name = r.name || '';
-    if (LIVING.test(name) && !isBasementLevel(lvl) && !roomWindowDirections(project, r).length) {
+    if (LIVING.test(name) && !isBasementLevel(lvl) && !roomWindowDirections(project, r).length && !roofWindowsOver(project, r).length) {
       push({ id: `cw:${r.id}`, level: 'warn', title: `${name}: нет окна`, text: 'В жилой комнате нужно окно — для света и проветривания.', levelId: lid, refs: [{ kind: 'room', id: r.id }], at: polygonLabelPoint(r.points), area: r.points });
     }
     if (CORRIDOR.test(name)) {

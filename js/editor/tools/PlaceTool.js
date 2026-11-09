@@ -15,6 +15,7 @@ import { stairRise } from '../render/drawStairs.js';
 import { normalizeDeg, pointInPolygon } from '../../core/geometry.js';
 import { levelAbove, groundLevel, isRoofTerrace } from '../../model/project.js';
 import { itemLayer, layerVisible, LAYERS } from '../../model/layers.js';
+import { roofSurfaceAt, slopeRotation } from '../../geometry/roofSurface.js';
 
 export class PlaceTool extends Tool {
   constructor(editor, what) {
@@ -81,6 +82,13 @@ export class PlaceTool extends Tool {
       // стоит на полу этажа, снаружи — на земле участка
       const inRoom = this.project.rooms.some((r) => r.levelId === this.levelId && pointInPolygon(p, r.points));
       obj = createItem(this.levelId, this.settings.type, p.x, p.y, { rotation: this.settings.rotation, onLevel: inRoom || isRoofTerrace(this.project, this.levelId) });
+      if (catalogItem(obj.type)?.roofMount) {
+        // мансардное окно ложится по скату: глубина — вниз по уклону
+        const surf = roofSurfaceAt(this.project, this.levelId, p);
+        const rot = surf && slopeRotation(surf);
+        if (rot != null) obj.rotation = Math.round(rot * 10) / 10;
+        obj._onRoof = !!surf;
+      }
       if (catalogItem(obj.type)?.wallSnap && !e.alt) {
         const sn = snapToWall(this.editor, p, obj.d, obj.w);
         if (sn) {
@@ -146,6 +154,9 @@ export class PlaceTool extends Tool {
   placeAt(e) {
     const obj = this._build(e);
     delete obj._snapped;
+    const onRoof = obj._onRoof;
+    delete obj._onRoof;
+    if (onRoof === false) this.toast('Мансардное окно ставят на скат: здесь над этажом нет крыши', 'warn');
     this.align = null;
     const isStair = this.what === 'stair';
     this.store.commit((p) => (isStair ? p.stairs : p.items).push(obj));

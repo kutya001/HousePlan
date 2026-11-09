@@ -405,7 +405,8 @@ function mansardHouse() {
   b.room(2, 'Спальня', R(-4, 0.5, 4, 5), 'parquet');
   b.room(2, 'Кабинет', R(-4, -5, 0, 0.5), 'laminate');
   b.room(2, 'Холл', R(0, -5, 4, 0.5), 'laminate');
-  b.door(p2, 2.9, 0.5);
+  // дверь ближе к коньку: у «колена» она упёрлась бы в скат
+  b.door(p2, 2.2, 0.5);
   b.door(b.p.walls.at(-1), 0, -4.3, { width: 0.8 });
   b.win(aBottom, 0, 5, { width: 1.6, height: 1.5, sill: 0.8 });
   b.win(aTop, -2, -5, { width: 1.0, height: 1.3, sill: 0.9 });
@@ -416,6 +417,10 @@ function mansardHouse() {
   b.item(2, 'wardrobe', -1.55, 4.5, 180, { h: 1.9 });
   b.item(2, 'desk', -2, -4.47);
   b.item(2, 'office_chair', -2, -3.7, 180);
+  // мансардные окна в скатах: спальня на запад и восток, кабинет на запад
+  b.item(2, 'roof_window', -2.7, 3.0, 90);
+  b.item(2, 'roof_window', 2.7, 3.0, 270);
+  b.item(2, 'roof_window', -2.7, -2.4, 90);
   b.roof(2, 'gable', 0, 0, 10.4, 8.4, 90, { pitch: 40, overhang: 0.5 });
 
   landscape(b, { entrance: { x: 2.5, y: 7.5 }, front: 20 });
