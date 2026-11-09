@@ -143,7 +143,7 @@ export const SCHEMAS = {
     select('shape', 'Форма', STAIR_SHAPES, {
       set: (s, v) => {
         s.shape = v;
-        const dims = { straight: [1.0, 3.6], L: [2.4, 3.0], U: [2.3, 3.0], spiral: [1.8, 1.8] }[v];
+        const dims = { straight: [1.0, 4.8], L: [3.2, 3.4], U: [2.3, 3.3], spiral: [1.8, 1.8] }[v];
         [s.width, s.length] = dims;
       },
       rebuild: true,

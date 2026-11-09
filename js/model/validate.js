@@ -15,10 +15,11 @@ import { stairLayout } from '../geometry/stairGeometry.js';
 import { levelFootprints } from '../geometry/roomDetect.js';
 import { porchSteps, outsideSide } from '../geometry/porch.js';
 import { cellarEntries } from '../geometry/cellarEntry.js';
-import { rectCorners, circlePolygon, pointInPolygon, polygonArea, polygonSignedArea, clipPolygonHalfPlane, bboxOf, dist, add, mul, segmentIntersect } from '../core/geometry.js';
+import { rectCorners, circlePolygon, pointInPolygon, polygonArea, polygonSignedArea, clipPolygonHalfPlane, bboxOf, dist, add, mul, segmentIntersect, projectOnSegment, polygonLabelPoint } from '../core/geometry.js';
 import { catalogItem } from './catalog.js';
 import { stairStyle, TREAD } from './defaults.js';
-import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, wallHeight, isBasement } from './project.js';
+import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, levelAbove, wallHeight, isBasement } from './project.js';
+import { roomWindowDirections } from '../geometry/orientation.js';
 
 const OPENING_LABEL = { door: 'Дверь', window: 'Окно', arch: 'Проём', opening: 'Проём' };
 
@@ -248,6 +249,7 @@ export function checkProject(project) {
     checkWallsDuplicate(geoms, lid, push);
     checkWallCrossings(geoms, lid, push);
     checkBuildings(project, lid, push);
+    checkComfort(project, level, geoms, rooms, stairs, lid, push);
 
     // мебель вне перекрытия этажа и этаж без пола
     const walls = [...geoms.values()];
@@ -300,6 +302,7 @@ export function checkProject(project) {
 
   checkSite(project, ground, geomsOf, push);
   checkCellarEntries(project, ground, push);
+  checkSetback(project, ground, push);
 
   const rank = { error: 0, warn: 1 };
   return issues.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -487,11 +490,15 @@ function stepsBetween(st, y0, y1) {
 function checkStairs(stairs, geoms, openingsByWall, project, lid, push) {
   for (const st of stairs) {
     for (const g of geoms.values()) {
-      const pieces = wallPieces3D(g, openingsByWall.get(g.wall.id) || [], wallHeight(project, g.wall)).filter((p) => p.y0 < 0.3);
-      const r = deepest(
-        stepsBetween(st, 0, 0.3),
-        pieces.map((p) => ccw(hull(p.poly))),
-      );
+      const pieces = wallPieces3D(g, openingsByWall.get(g.wall.id) || [], wallHeight(project, g.wall)).map((p) => ({ ...p, poly: ccw(hull(p.poly)) }));
+      let r = null;
+      for (const sp of st.spans) {
+        const hit = deepest(
+          [sp.poly],
+          pieces.filter((p) => p.y0 < sp.y1 - 0.02 && p.y1 > sp.y0 + 0.02).map((p) => p.poly),
+        );
+        if (hit && (!r || hit.depth > r.depth)) r = hit;
+      }
       if (r && r.depth > TOL) {
         push({
           id: `sw:${st.s.id}:${g.wall.id}`,
@@ -941,6 +948,194 @@ function checkCellarEntries(project, ground, push) {
         });
       }
     }
+  }
+}
+
+// ── Удобство планировки ──────────────────────────────────────────────────
+
+const LIVING = /гостин|спальн|детск|кабинет|зал\b|^зал|кухн|столов/i;
+const BEDROOM = /спальн|детск/i;
+const CORRIDOR = /коридор|холл|прихож/i;
+const SERVICE = /санузел|ванн|туалет|душ|гардероб|кладов|постир|прачеч/i;
+
+function checkComfort(project, level, geoms, rooms, stairs, lid, push) {
+  const lvl = level;
+  // лестницы: высота и глубина ступени, ширина марша
+  for (const st of stairs) {
+    const s = st.s;
+    const lay = stairLayout(s, levelWallHeight(lvl));
+    const h = lay.riser;
+    if (s.shape === 'spiral') {
+      if (s.width < 1.4) {
+        push({ id: `cs:${s.id}:w`, level: 'warn', title: 'Тесная винтовая лестница', text: `Диаметр ${cm(s.width)} — удобнее от 1,4–1,6 м, иначе мебель не поднять.`, levelId: lid, refs: [{ kind: 'stair', id: s.id }], at: { x: s.x, y: s.y }, area: st.outline });
+      }
+      continue;
+    }
+    const run = lay.steps.filter((x) => !x.landing);
+    const depth = treadDepth(run);
+    const rule = 2 * h + depth;
+    const flight = s.shape === 'straight' ? s.width : Math.min(s.flight || 1, s.width);
+    const probs = [];
+    if (h > 0.19) probs.push(`ступени высокие — ${cm(h)} (удобно 15–18 см)`);
+    if (depth < 0.25) probs.push(`проступь узкая — ${cm(depth)} (удобно от 25–28 см)`);
+    if (rule < 0.58 || rule > 0.67) probs.push(`шаг 2h+b = ${cm(rule)} (удобно 60–64 см)`);
+    if (flight < 0.8) probs.push(`марш узкий — ${cm(flight)} (удобно от 90 см)`);
+    if (probs.length) {
+      push({
+        id: `cs:${s.id}`,
+        level: 'warn',
+        title: 'Неудобная лестница',
+        text: `${probs.join('; ')}. Удлините марш или поменяйте форму лестницы.`.replace(/^./, (c) => c.toUpperCase()),
+        levelId: lid,
+        refs: [{ kind: 'stair', id: s.id }],
+        at: { x: s.x, y: s.y },
+        area: st.outline,
+      });
+    }
+    // проём в перекрытии вырезается, только если лестница целиком внутри одной комнаты этажа выше
+    const above = levelAbove(project, lid);
+    if (above) {
+      const upRooms = project.rooms.filter((r) => r.levelId === above.id);
+      const over = upRooms.filter((r) => st.outline.some((p) => pointInPolygon(p, r.points)) || r.points.some((p) => pointInPolygon(p, st.outline)));
+      const cut = upRooms.some((r) => st.outline.every((p) => pointInPolygon(p, r.points)));
+      if (over.length && !cut) {
+        push({
+          id: `ch:${s.id}`,
+          level: 'warn',
+          title: 'Над лестницей нет проёма',
+          text: `Лестница попадает под стену или на стык комнат этажа «${above.name}» — проём в перекрытии не вырезается, головой упрётесь в потолок. Подвиньте лестницу целиком в одну комнату.`,
+          levelId: lid,
+          refs: [{ kind: 'stair', id: s.id }],
+          at: { x: s.x, y: s.y },
+          area: st.outline,
+        });
+      }
+    }
+  }
+
+  // комнаты: окна в жилых, ширина коридоров, проходные спальни
+  const allGeoms = [...geoms.values()];
+  const doorsOf = (room) => {
+    const out = [];
+    for (const g of allGeoms) {
+      for (const o of project.openings) {
+        if (o.wallId !== g.wall.id || o.kind === 'window' || o.sill > 0.05) continue;
+        const c = pointOnWall(g, o.t);
+        const sides = [1, -1].map((sd) => {
+          const q = { x: c.x + g.n.x * sd * (g.half + 0.3), y: c.y + g.n.y * sd * (g.half + 0.3) };
+          return rooms.find((r) => pointInPolygon(q, r.points)) || null;
+        });
+        const i = sides.indexOf(room);
+        if (i >= 0) out.push({ o, other: sides[1 - i] });
+      }
+    }
+    return out;
+  };
+  for (const r of rooms) {
+    const name = r.name || '';
+    if (LIVING.test(name) && !isBasementLevel(lvl) && !roomWindowDirections(project, r).length) {
+      push({ id: `cw:${r.id}`, level: 'warn', title: `${name}: нет окна`, text: 'В жилой комнате нужно окно — для света и проветривания.', levelId: lid, refs: [{ kind: 'room', id: r.id }], at: polygonLabelPoint(r.points), area: r.points });
+    }
+    if (CORRIDOR.test(name)) {
+      const w = narrowest(r.points) - 0.15;
+      if (w < 0.9) {
+        push({ id: `cc:${r.id}`, level: 'warn', title: `${name}: узко`, text: `Самое узкое место ≈ ${cm(w)} — удобно от 0,9–1,2 м, чтобы разойтись и пронести мебель.`, levelId: lid, refs: [{ kind: 'room', id: r.id }], at: polygonLabelPoint(r.points), area: r.points });
+      }
+    }
+    if (BEDROOM.test(name)) {
+      const passes = doorsOf(r).filter((d) => d.other && !SERVICE.test(d.other.name || ''));
+      if (passes.length >= 2) {
+        push({
+          id: `cp:${r.id}`,
+          level: 'warn',
+          title: `${name}: проходная`,
+          text: `В неё ведут двери из «${passes.map((d) => d.other.name).join('», «')}» — через спальню будут ходить. Оставьте один вход.`,
+          levelId: lid,
+          refs: [{ kind: 'room', id: r.id }],
+          at: polygonLabelPoint(r.points),
+          area: r.points,
+        });
+      }
+    }
+  }
+}
+
+const isBasementLevel = (l) => isBasement(l);
+
+function treadDepth(run) {
+  if (run.length < 2) return 0.3;
+  const c = (p) => p.reduce((a, q) => ({ x: a.x + q.x / p.length, y: a.y + q.y / p.length }), { x: 0, y: 0 });
+  let sum = 0;
+  let n = 0;
+  for (let i = 1; i < run.length; i++) {
+    const d = dist(c(run[i - 1].poly), c(run[i].poly));
+    if (d < 0.6) {
+      sum += d;
+      n++;
+    }
+  }
+  return n ? sum / n : 0.3;
+}
+
+/** Самое узкое место многоугольника: от середины каждого ребра — луч внутрь до границы. */
+function narrowest(poly) {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const L = dist(a, b);
+    if (L < 0.3) continue;
+    let n = { x: -(b.y - a.y) / L, y: (b.x - a.x) / L };
+    const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if (!pointInPolygon({ x: m.x + n.x * 0.02, y: m.y + n.y * 0.02 }, poly)) n = { x: -n.x, y: -n.y };
+    let t = Infinity;
+    for (let j = 0; j < poly.length; j++) {
+      if (j === i) continue;
+      const r = segmentIntersect(m, { x: m.x + n.x * 100, y: m.y + n.y * 100 }, poly[j], poly[(j + 1) % poly.length]);
+      if (r && r.t * 100 > 0.01) t = Math.min(t, r.t * 100);
+    }
+    best = Math.min(best, t);
+  }
+  return best;
+}
+
+/** Отступ дома от границ участка (site.setback, по умолчанию 3 м). */
+function checkSetback(project, ground, push) {
+  const b = project.site?.boundary;
+  if (!ground || !b || b.length < 3) return;
+  const need = Number.isFinite(project.site.setback) ? project.site.setback : 3;
+  const fps = levelFootprints(project.walls.filter((w) => w.levelId === ground.id));
+  let worst = null;
+  for (const fp of fps) {
+    for (const p of fp) {
+      const inside = pointInPolygon(p, b);
+      let d = Infinity;
+      let q = null;
+      for (let i = 0; i < b.length; i++) {
+        const pr = projectOnSegment(p, b[i], b[(i + 1) % b.length]);
+        if (pr.dist < d) {
+          d = pr.dist;
+          q = pr.point;
+        }
+      }
+      if (!inside) d = -d;
+      if (!worst || d < worst.d) worst = { d, p, q };
+    }
+  }
+  if (!worst) return;
+  if (worst.d < 0) {
+    push({ id: 'sb:out', level: 'error', title: 'Дом выходит за границу участка', text: 'Угол дома за забором — подвиньте дом или границу участка.', levelId: SITE_LEVEL, refs: [], at: worst.p, area: circlePolygon(worst.p.x, worst.p.y, 0.6, 12) });
+  } else if (need > 0 && worst.d < need - 0.05) {
+    push({
+      id: 'sb:near',
+      level: 'warn',
+      title: `Дом ближе ${String(need).replace('.', ',')} м к границе участка`,
+      text: `Сейчас ${worst.d.toFixed(2).replace('.', ',')} м. Нужный отступ задаётся в свойствах участка — уточните требования для своего участка.`,
+      levelId: SITE_LEVEL,
+      refs: [],
+      at: worst.p,
+      area: [worst.p, worst.q, { x: worst.q.x + 0.05, y: worst.q.y + 0.05 }, { x: worst.p.x + 0.05, y: worst.p.y + 0.05 }],
+    });
   }
 }
 

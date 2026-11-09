@@ -105,9 +105,9 @@ function boxPreset(floors) {
       roof: floors > 1 ? 'gable' : 'none',
       roomName: 'Комната',
     });
-    if (floors > 1 && w >= 3 && d >= 4.6) {
+    if (floors > 1 && w >= 3 && d >= 5.6) {
       const t = DEFAULTS.wall.exterior.thickness;
-      b.stair(0, 'straight', -w / 2 + t / 2 + 0.55, -d / 2 + t / 2 + 1.85, 0);
+      b.stair(0, 'straight', -w / 2 + t / 2 + 0.55, -d / 2 + t / 2 + 2.45, 0);
     }
     b.site(25, 40);
     return b.p;
@@ -233,7 +233,7 @@ function house2floors() {
   b.item(0, 'shower', -4.35, 0.49);
   b.item(0, 'washing_machine', -1.5, 0.64, 180);
   b.item(0, 'wardrobe', 4.5, 0.3, 90, { w: 1.2 });
-  b.stair(0, 'U', 3.5, -4.2, 0);
+  b.stair(0, 'U', 3.5, -4.05, 0);
 
   // 2 этаж
   const [t2, r2, b2, l2] = b.loop(1, R(-5, -6, 5, 6));
@@ -369,7 +369,7 @@ function mansardHouse() {
   b.item(0, 'washing_machine', -3.4, -4.5, 0);
   b.item(0, 'box', 0, 4.4, 180, { w: 2.2, d: 0.7, h: 0.9, color: '#a77a52' });
   b.item(0, 'bookshelf', -3.62, 2.5, 270);
-  b.stair(0, 'straight', 2.6, -2.2, 180);
+  b.stair(0, 'straight', 2.6, -2.5, 180, { length: 4.2 });
 
   // первый этаж: гостиная, кухня, холл с двумя лестницами
   const p1 = b.wall(1, -4, 0.5, 4, 0.5);
@@ -397,7 +397,7 @@ function mansardHouse() {
   b.item(1, 'chair', -1.5, -1.3, 180);
   b.item(1, 'chair', -2.5, -2.7, 0);
   b.item(1, 'chair', -1.5, -2.7, 0);
-  b.stair(1, 'straight', 0.9, -2.2, 180);
+  b.stair(1, 'straight', 0.9, -2.3, 180, { length: 4.8 });
 
   // мансарда: спальня и кабинет, окна во фронтонах, двускатная крыша 40°
   const p2 = b.wall(2, -4, 0.5, 4, 0.5);

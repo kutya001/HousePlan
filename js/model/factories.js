@@ -51,9 +51,10 @@ export function createRoom(levelId, points, opts = {}) {
 export function createStair(levelId, x, y, opts = {}) {
   const shape = opts.shape || 'straight';
   const presets = {
-    straight: { width: 1.0, length: 3.6 },
-    L: { width: 2.4, length: 3.0 },
-    U: { width: 2.3, length: 3.0 },
+    // габариты под удобный шаг (ступень ~17 см, проступь ~27 см) при высоте этажа ~3 м
+    straight: { width: 1.0, length: 4.8 },
+    L: { width: 3.2, length: 3.4 },
+    U: { width: 2.3, length: 3.3 },
     spiral: { width: 1.8, length: 1.8 },
   };
   const p = presets[shape] || presets.straight;
