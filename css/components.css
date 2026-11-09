@@ -639,6 +639,11 @@ kbd {
 .modal-wide {
   width: min(1040px, 100%);
 }
+/* широкие таблицы внутри не должны раздвигать окно (элемент сетки) */
+.modal {
+  min-width: 0;
+  max-width: 100%;
+}
 .modal-head {
   display: flex;
   align-items: center;
@@ -663,6 +668,7 @@ kbd {
 }
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 22px 18px;
@@ -1255,4 +1261,127 @@ kbd {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Смета и спецификации ───────────────────────────────────────────── */
+.est {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+.est .modal-tabs {
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.est-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+}
+.est-pane[hidden] {
+  display: none;
+}
+.est-note {
+  margin: 0;
+  font-size: var(--fs-s);
+}
+.est-scroll {
+  overflow: auto;
+  max-height: min(56vh, 560px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.est-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-s);
+  font-variant-numeric: tabular-nums;
+}
+.est-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.est-table td {
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+.est-table td small {
+  display: block;
+  margin-top: 1px;
+}
+.est-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.est-sec td {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.est-table .est-price {
+  width: 96px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: right;
+}
+.est-table .est-price.changed {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--surface));
+}
+.est-total {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px 2px 0;
+}
+.est-total > span:first-child {
+  font-weight: 600;
+}
+.est-total-sum {
+  font-size: var(--fs-xl);
+}
+.est-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.est-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.est-kv strong {
+  font-size: var(--fs-l, 16px);
+}
+@media (max-width: 640px) {
+  .est-table .est-price {
+    width: 72px;
+  }
+  .est-table td,
+  .est-table th {
+    padding: 6px;
+  }
 }

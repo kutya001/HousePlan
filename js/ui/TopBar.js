@@ -99,6 +99,8 @@ export class TopBar {
       { label: 'Импорт и экспорт…', icon: 'swap', onClick: () => app.ui.exchange.open('import') },
       { label: 'Построить дом с ИИ…', icon: 'spark', onClick: () => app.ui.exchange.open('ai') },
       { separator: true },
+      { label: 'Смета и спецификации…', icon: 'calc', onClick: () => app.ui.estimate.open() },
+      { separator: true },
       { label: 'Картинка плана (PNG)', icon: 'image', onClick: () => app.file.exportPlanPNG() },
       { label: 'Картинка 3D-вида (PNG)', icon: 'image', onClick: () => app.file.export3DPNG() },
     ];
