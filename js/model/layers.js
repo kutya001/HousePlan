@@ -16,7 +16,10 @@ export const LAYERS = [
 export const LAYER_COLORS = { electric: '#d39a12', plumbing: '#2f7fd1', heating: '#d6452f' };
 
 export function itemLayer(it) {
-  return catalogItem(it.type)?.layer || 'furniture';
+  const c = catalogItem(it.type);
+  // балкон, козырёк, навес, мансардное окно — часть здания, не прячутся со слоем мебели
+  if (c?.category === 'structure') return 'structure';
+  return c?.layer || 'furniture';
 }
 
 export function layerVisible(settings, layer) {

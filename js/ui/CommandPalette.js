@@ -55,6 +55,7 @@ export class CommandPalette {
     cmd('Открыть файл проекта', 'open', () => app.file.open(), 'Ctrl+O');
     cmd('Новый проект', 'plus', () => c.newProject(), 'Файл');
     cmd('Смета и спецификации: объёмы, цены, Excel', 'calc', () => app.ui.estimate.open(), 'Файл');
+    cmd('Чертежи: планы, фасады, разрез — печать и PDF', 'print', () => app.ui.drawings.open(), 'Файл');
     cmd('Экспликация помещений', 'room', () => app.ui.estimate.open('rooms'), 'Смета');
     cmd('Ведомость окон и дверей', 'door', () => app.ui.estimate.open('ops'), 'Смета');
     cmd('Картинка плана (PNG)', 'image', () => app.file.exportPlanPNG(), 'Файл');

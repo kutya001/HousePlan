@@ -100,6 +100,7 @@ export class TopBar {
       { label: 'Построить дом с ИИ…', icon: 'spark', onClick: () => app.ui.exchange.open('ai') },
       { separator: true },
       { label: 'Смета и спецификации…', icon: 'calc', onClick: () => app.ui.estimate.open() },
+      { label: 'Чертежи для печати и PDF…', icon: 'print', onClick: () => app.ui.drawings.open() },
       { separator: true },
       { label: 'Картинка плана (PNG)', icon: 'image', onClick: () => app.file.exportPlanPNG() },
       { label: 'Картинка 3D-вида (PNG)', icon: 'image', onClick: () => app.file.export3DPNG() },

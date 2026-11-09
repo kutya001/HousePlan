@@ -28,6 +28,7 @@ import { PresetsDialog } from '../ui/PresetsDialog.js';
 import { HelpDialog } from '../ui/HelpDialog.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { EstimateDialog } from '../ui/EstimateDialog.js';
+import { DrawingsView } from '../ui/DrawingsView.js';
 import { CommandPalette } from '../ui/CommandPalette.js';
 import { View3DBar } from '../ui/View3DBar.js';
 import { SelectionBar } from '../ui/SelectionBar.js';
@@ -69,6 +70,7 @@ export class App {
     this.ui.help = new HelpDialog(this);
     this.ui.settings = new SettingsDialog(this);
     this.ui.estimate = new EstimateDialog(this);
+    this.ui.drawings = new DrawingsView(this);
     this.ui.palette = new CommandPalette(this);
     this.ui.side = new SidePanel(this, $('side'));
     this.ui.topbar = new TopBar(this, $('topbar'));

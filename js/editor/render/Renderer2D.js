@@ -50,7 +50,8 @@ export class Renderer2D {
     return n / this.vp.scale;
   }
 
-  render(ctx, { dpr, overlay = true, exportMode = false } = {}) {
+  /** @param noSite — без участка (газон, забор, садовые объекты): листы планов этажей */
+  render(ctx, { dpr, overlay = true, exportMode = false, noSite = false } = {}) {
     this.dpr = dpr;
     this.exportMode = exportMode;
     const vp = this.vp;
@@ -68,8 +69,10 @@ export class Renderer2D {
     this.geoms = this.editor.geomsFor(levelId);
 
     if (!exportMode) drawGrid(ctx, this);
-    drawSite(ctx, this);
-    if (this.ground) drawSiteItems(ctx, this);
+    if (!noSite) {
+      drawSite(ctx, this);
+      if (this.ground) drawSiteItems(ctx, this);
+    }
     drawOutdoorSteps(ctx, this);
     drawRooms(ctx, this);
     drawAtticLow(ctx, this);
@@ -85,6 +88,8 @@ export class Renderer2D {
     drawRoomLabels(ctx, this);
     if (this.settings.dims) drawDimensions(ctx, this);
     drawIssues(ctx, this);
+    // чертежи для печати: марки проёмов, номера помещений, линия разреза
+    this.printExtras?.(ctx, this);
     if (!exportMode) drawSpawn(ctx, this);
     if (!exportMode) drawCharacter(ctx, this, this.editor.character);
     if (this.settings.compass !== false) drawCompass(ctx, this);

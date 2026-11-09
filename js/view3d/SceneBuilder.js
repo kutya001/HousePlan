@@ -27,7 +27,7 @@ export function buildScene(project, opts) {
 
   root.add(buildSite(project));
   // слои (электрика, сантехника, отопление) — те же переключатели, что на плане
-  const shown = (it) => opts.furniture && itemVisible(opts.layers, it);
+  const shown = (it) => (opts.furniture || catalogItem(it.type)?.category === 'structure') && itemVisible(opts.layers, it);
   for (const it of project.items.filter((i) => i.levelId === SITE_LEVEL && shown(i))) root.add(buildItem(it, 0));
 
   const ground = groundLevel(project);

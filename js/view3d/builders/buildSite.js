@@ -9,6 +9,7 @@ import { cellarEntries, RAIL_H, PIT_CURB } from '../../geometry/cellarEntry.js';
 
 export function buildSite(project) {
   const group = new THREE.Group();
+  group.name = 'site';
   const b = project.site.boundary;
   const bb = bboxOf(b);
   const size = Math.max(160, Math.max(bb.w, bb.h) * 4);
