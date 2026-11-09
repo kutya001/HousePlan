@@ -86,6 +86,9 @@ export const CATALOG = [
   { type: 'radiator', name: 'Радиатор', category: 'mep', layer: 'heating', w: 1.0, d: 0.1, h: 0.55, color: '#f3f3f1', wallSnap: true, elevation: 0.12 },
   { type: 'towel_rail', name: 'Полотенцесушитель', category: 'mep', layer: 'heating', w: 0.5, d: 0.1, h: 0.8, color: '#c8ccd1', wallSnap: true, elevation: 0.9 },
 
+  // Своя модель .glb — в каталоге не показывается, ставится кнопкой «Своя 3D-модель»
+  { type: 'custom', name: 'Своя 3D-модель', category: 'custom', w: 1, d: 1, h: 1, color: '#b8c4d0', hidden: true },
+
   // Участок
   { type: 'tree', name: 'Дерево лиственное', category: 'outdoor', w: 4.5, d: 4.5, h: 6.5, color: '#6f9d4f', outdoor: true },
   { type: 'conifer', name: 'Ель / сосна', category: 'outdoor', w: 3, d: 3, h: 7, color: '#3f6f4a', outdoor: true },

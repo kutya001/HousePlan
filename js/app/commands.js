@@ -10,6 +10,7 @@ import { findFaces } from '../geometry/roomDetect.js';
 import { pointInPolygon, polygonLabelPoint, normalizeDeg, rotate, DEG, bboxOf } from '../core/geometry.js';
 import { buildHousePreset, HOUSE_PRESETS } from '../model/presets.js';
 import { DEFAULTS } from '../model/defaults.js';
+import { unpackModels } from '../io/modelStore.js';
 
 export class Commands {
   constructor(app) {
@@ -327,6 +328,13 @@ export class Commands {
   }
 
   loadProject(raw) {
+    // вложенные в файл 3D-модели — в хранилище браузера, в проекте остаются ссылки
+    if (raw?.models && typeof raw.models === 'object') {
+      const models = raw.models;
+      raw = { ...raw };
+      delete raw.models;
+      unpackModels(models).then(() => this.app.view3d?.invalidate());
+    }
     this._load(normalizeProject(raw), true);
   }
 

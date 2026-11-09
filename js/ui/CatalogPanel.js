@@ -1,5 +1,5 @@
 /** Каталог мебели и объектов участка: поиск, категории, перетаскивание на план. */
-import { h, clear } from './dom.js';
+import { h, clear, icon } from './dom.js';
 import { CATALOG, CATEGORIES } from '../model/catalog.js';
 import { drawItemSymbol } from '../editor/render/symbols2d.js';
 import { fmtLenShort } from '../core/format.js';
@@ -61,14 +61,20 @@ export class CatalogPanel {
     );
     this._syncRecentChip();
     this.grid = h('div', { class: 'catalog-grid' });
-    this.root.append(search, this.chips, this.grid, h('p', { class: 'muted small' }, 'Кликните предмет и поставьте на план, или перетащите его мышью. R — повернуть.'));
+    const own = h(
+      'button',
+      { class: 'btn btn-small catalog-own', 'data-tip': 'Свой файл .glb (glTF 2.0): мебель, техника, машина. Хранится в браузере и сохраняется в файл проекта', onclick: () => this.app.file.importModel() },
+      icon('cube', 16),
+      'Своя 3D-модель (.glb)',
+    );
+    this.root.append(search, this.chips, this.grid, own, h('p', { class: 'muted small' }, 'Кликните предмет и поставьте на план, или перетащите его мышью. R — повернуть.'));
     this._renderGrid();
   }
 
   _renderGrid() {
     clear(this.grid);
     const items = this.query
-      ? CATALOG.filter((c) => c.name.toLowerCase().includes(this.query))
+      ? CATALOG.filter((c) => !c.hidden && c.name.toLowerCase().includes(this.query))
       : this.category === 'recent'
         ? this.recent.map((t) => CATALOG.find((c) => c.type === t)).filter(Boolean)
         : CATALOG.filter((c) => c.category === this.category);

@@ -1467,3 +1467,8 @@ kbd {
   margin: 0;
   font-size: var(--fs-s);
 }
+
+.catalog-own {
+  align-self: flex-start;
+  margin-top: 4px;
+}

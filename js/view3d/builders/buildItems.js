@@ -7,6 +7,7 @@ import { box, cylinder, mergeGeometries, mesh } from '../meshUtils.js';
 import { mat, glassMat, lampGlowMat } from '../materials.js';
 import { DEG } from '../../core/geometry.js';
 import { railingGeos, beam } from './railing.js';
+import { modelReady, requestModel } from '../models.js';
 
 const WOOD = '#9a6b47';
 const DARK = '#2f3236';
@@ -567,6 +568,7 @@ function darken(hex) {
  * @returns {THREE.Group}
  */
 export function buildItem(item, baseY, elevation = item.elevation || 0, tilt = null) {
+  if (item.type === 'custom') return buildCustom(item, baseY, elevation);
   const parts = new Map();
   const add = (geom, color, opts = {}) => {
     const key = opts.glass ? 'glass' : opts.glow ? 'glow' : `${color || item.color}|${opts.opacity ?? 1}`;
@@ -592,5 +594,28 @@ export function buildItem(item, baseY, elevation = item.elevation || 0, tilt = n
     group.quaternion.copy(align.multiply(yaw));
   }
   group.userData.ref = { kind: 'item', id: item.id };
+  return group;
+}
+
+/** Своя модель: копия загруженной, растянутая под размеры предмета; пока грузится — полупрозрачная коробка. */
+function buildCustom(item, baseY, elevation) {
+  const group = new THREE.Group();
+  const src = modelReady(item.model);
+  const ref = { kind: 'item', id: item.id };
+  if (src) {
+    const s = src.userData.size;
+    const copy = src.clone(true);
+    copy.scale.set(item.w / s.w, item.h / s.h, item.d / s.d);
+    copy.traverse((o) => {
+      if (o.isMesh) o.userData.ref = ref;
+    });
+    group.add(copy);
+  } else {
+    requestModel(item.model);
+    group.add(mesh(box(item.w, item.h, item.d), mat(item.color || '#b8c4d0', { opacity: 0.45 }), ref, { cast: false }));
+  }
+  group.position.set(item.x, baseY + elevation, item.y);
+  group.rotation.y = -(item.rotation || 0) * DEG;
+  group.userData.ref = ref;
   return group;
 }

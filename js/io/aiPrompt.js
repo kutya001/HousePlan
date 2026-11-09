@@ -65,7 +65,7 @@ export const EXAMPLE = {
 const list = (obj, fn = (v) => v) => Object.entries(obj).map(([k, v]) => `${k} — ${fn(v)}`).join('; ');
 
 function catalogText() {
-  const indoor = CATALOG.filter((c) => !c.outdoor);
+  const indoor = CATALOG.filter((c) => !c.outdoor && !c.hidden);
   const outdoor = CATALOG.filter((c) => c.outdoor);
   const row = (c) => `${c.type} — ${c.name}, ${c.w}×${c.d}×${c.h} м${c.wallSnap ? ', спинкой к стене' : ''}${c.ceiling ? ', под потолком' : c.elevation ? `, на высоте ${c.elevation} м` : ''}`;
   const mep = indoor.filter((c) => c.category === 'mep');

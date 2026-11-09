@@ -48,6 +48,7 @@ export class CommandPalette {
     cmd('Тёмная тема', 'moon', () => app.state.setSetting('theme', 'dark'), 'Оформление');
     cmd('Светлая тема', 'sun', () => app.state.setSetting('theme', 'light'), 'Оформление');
     cmd('Настройки', 'settings', () => app.ui.settings.open(), 'Приложение');
+    cmd('Своя 3D-модель (.glb): загрузить и поставить', 'cube', () => app.file.importModel(), 'Каталог');
     cmd('Сохранить проект в файл', 'save', () => app.file.save(), 'Ctrl+S');
     cmd('Построить дом с ИИ (промпт для нейросети)', 'spark', () => app.ui.exchange.open('ai'), 'Файл');
     cmd('Импорт проекта: ответ ИИ или JSON', 'swap', () => app.ui.exchange.open('import'), 'Файл');
@@ -65,7 +66,7 @@ export class CommandPalette {
     cmd('Справка и горячие клавиши', 'help', () => app.ui.help.open(), 'F1');
     for (const l of app.project.levels) cmd(`Перейти: ${l.name}`, 'layers', () => app.state.setLevel(l.id), 'Этаж');
     for (const p of HOUSE_PRESETS) cmd(`Пресет: ${p.name}`, 'presets', () => c.applyHousePreset(p.id, {}), 'Пресет');
-    for (const it of CATALOG) {
+    for (const it of CATALOG.filter((c) => !c.hidden)) {
       list.push({
         label: `Поставить: ${it.name}`,
         icon: it.outdoor ? 'tree' : 'sofa',

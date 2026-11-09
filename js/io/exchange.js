@@ -13,6 +13,7 @@ import { createEmptyProject, createLevel, normalizeProject, SITE_LEVEL, getLevel
 import { createWall, createOpening, createRoom, createStair, createItem, createRoof, createZone } from '../model/factories.js';
 import { CATALOG, catalogItem } from '../model/catalog.js';
 import { DESCENTS } from '../geometry/cellarEntry.js';
+import { FACADE_FINISHES, ROOF_COVERS } from '../model/finishes.js';
 import { RAILINGS } from '../geometry/stairRails.js';
 import { DEFAULTS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { findFaces } from '../geometry/roomDetect.js';
@@ -34,6 +35,7 @@ export function toExchange(project) {
     name: project.name,
     units: 'm',
     foundation: r3(project.foundation ?? DEFAULTS.foundation),
+    ...(project.facade && project.facade !== 'plaster' ? { facade: project.facade } : {}),
     site: {
       boundary: project.site.boundary.map(pt),
       fence: !!project.site.fence?.enabled,
@@ -67,7 +69,7 @@ export function toExchange(project) {
       furniture: project.items.filter((it) => it.levelId === level.id).map(itemOut),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
-        .map((r) => ({ type: r.type, x: r3(r.x), y: r3(r.y), w: r3(r.w), d: r3(r.d), rotation: r3(r.rotation || 0), pitch: r3(r.pitch), overhang: r3(r.overhang) })),
+        .map((r) => ({ type: r.type, x: r3(r.x), y: r3(r.y), w: r3(r.w), d: r3(r.d), rotation: r3(r.rotation || 0), pitch: r3(r.pitch), overhang: r3(r.overhang), ...(r.cover ? { cover: r.cover } : {}) })),
     };
     for (const o of project.openings) {
       if (!ids.has(o.wallId)) continue;
@@ -247,6 +249,7 @@ export function fromExchange(data) {
   const project = createEmptyProject(String(data.name || 'Проект от ИИ'));
   project.levels = [];
   project.foundation = num(data.foundation, DEFAULTS.foundation / k) * k;
+  if (FACADE_FINISHES[data.facade]) project.facade = data.facade;
   const site = data.site || {};
   const boundary = points(site.boundary, k);
   if (boundary.length >= 3) project.site.boundary = boundary;
@@ -397,6 +400,7 @@ function importLevel(project, lvl, l, k, warnings) {
         rotation: num(r.rotation, 0),
         pitch: clamp(num(r.pitch, DEFAULTS.roof.pitch), 0, 60),
         overhang: clamp(num(r.overhang, DEFAULTS.roof.overhang / k) * k, 0, 2),
+        ...(ROOF_COVERS[r.cover] ? { cover: r.cover } : {}),
       }),
     );
   }

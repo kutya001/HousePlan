@@ -606,6 +606,23 @@ const SYMBOLS = {
     circle(ctx, w * 0.25, d * 0.22, Math.min(w, d) * 0.14);
     ctx.stroke();
   },
+  custom(ctx, w, d) {
+    // своя 3D-модель: габарит и «куб» внутри
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    fs(ctx);
+    const k = Math.min(w, d) * 0.22;
+    ctx.beginPath();
+    ctx.rect(-k, -k * 0.6, k * 1.4, k * 1.4);
+    ctx.moveTo(-k, -k * 0.6);
+    ctx.lineTo(-k * 0.6, -k);
+    ctx.lineTo(k * 0.8, -k);
+    ctx.lineTo(k * 0.4, -k * 0.6);
+    ctx.moveTo(k * 0.8, -k);
+    ctx.lineTo(k * 0.8, k * 0.4);
+    ctx.lineTo(k * 0.4, k * 0.8);
+    ctx.stroke();
+  },
   roof_window(ctx, w, d) {
     // рама, стекло и стрелка вниз по скату
     ctx.beginPath();

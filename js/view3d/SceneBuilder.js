@@ -10,7 +10,7 @@ import { buildSite } from './builders/buildSite.js';
 import { buildWalls } from './builders/buildWalls.js';
 import { buildFloors, buildStairs, buildStairGuards, buildRoof } from './builders/buildStructure.js';
 import { buildItem } from './builders/buildItems.js';
-import { edgeMaterial } from './materials.js';
+import { edgeMaterial, TEX } from './materials.js';
 import { itemVisible, itemElevation } from '../model/layers.js';
 import { catalogItem } from '../model/catalog.js';
 import { roofSurfaceAt } from '../geometry/roofSurface.js';
@@ -22,6 +22,7 @@ import { roofSurfaceAt } from '../geometry/roofSurface.js';
  * @param opts { activeLevelId, cutaway, roofs, furniture, edges }
  */
 export function buildScene(project, opts) {
+  TEX.on = opts.textures !== false;
   const root = new THREE.Group();
   root.name = 'building';
 

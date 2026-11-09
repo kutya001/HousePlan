@@ -1,7 +1,8 @@
 /** Земля, газон участка, зоны ландшафта и забор. */
 import * as THREE from 'three';
-import { extrudePolygon, mergeGeometries, mesh, box } from '../meshUtils.js';
-import { mat } from '../materials.js';
+import { extrudePolygon, mergeGeometries, mesh, box, planarUV } from '../meshUtils.js';
+import { mat, TEX } from '../materials.js';
+import { ZONE_TEXTURE } from '../textures.js';
 import { COLORS, ZONE_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, dist, pointInPolygon } from '../../core/geometry.js';
 import { excavationOutlines } from '../../geometry/excavation.js';
@@ -29,15 +30,17 @@ export function buildSite(project) {
   const ground = mesh(extrudePolygon(square, -0.03, -0.01, pits.filter((h) => inside(h, square))), mat('#cdd5c3', { roughness: 1 }), null, { cast: false });
   group.add(ground);
 
-  const lawn = extrudePolygon(b, -0.01, 0.01, pits.filter((h) => inside(h, b)));
-  if (lawn) group.add(mesh(lawn, mat(COLORS.lawn, { roughness: 1 }), { kind: 'site', id: 'site' }, { cast: false }));
+  let lawn = extrudePolygon(b, -0.01, 0.01, pits.filter((h) => inside(h, b)));
+  if (lawn && TEX.on) lawn = planarUV(lawn);
+  if (lawn) group.add(mesh(lawn, mat(COLORS.lawn, { roughness: 1, map: 'grass' }), { kind: 'site', id: 'site' }, { cast: false }));
 
   for (const z of project.zones) {
     const m = ZONE_MATERIALS[z.material] || ZONE_MATERIALS.lawn;
     const top = z.material === 'water' ? 0.015 : z.material === 'deck' ? 0.12 : 0.03;
-    const geo = extrudePolygon(z.points, 0, top, pits.filter((h) => inside(h, z.points)));
+    let geo = extrudePolygon(z.points, 0, top, pits.filter((h) => inside(h, z.points)));
     if (!geo) continue;
-    const material = z.material === 'water' ? mat(m.color, { roughness: 0.1, metalness: 0.1 }) : mat(m.color, { roughness: 0.95 });
+    if (TEX.on && ZONE_TEXTURE[z.material]) geo = planarUV(geo);
+    const material = z.material === 'water' ? mat(m.color, { roughness: 0.1, metalness: 0.1 }) : mat(m.color, { roughness: 0.95, map: ZONE_TEXTURE[z.material] });
     group.add(mesh(geo, material, { kind: 'zone', id: z.id }, { cast: false }));
   }
 

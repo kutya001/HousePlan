@@ -20,6 +20,7 @@ import {
 } from './defaults.js';
 import { catalogItem } from './catalog.js';
 import { LAYERS, itemLayer } from './layers.js';
+import { FACADE_FINISHES, ROOF_COVERS } from './finishes.js';
 import { roofSurfaceAt, slopeAngle } from '../geometry/roofSurface.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
@@ -176,7 +177,7 @@ export const SCHEMAS = {
     color('color', 'Цвет'),
   ],
   item: [
-    readonly('Объект', (i) => catalogItem(i.type)?.name || i.type),
+    readonly('Объект', (i) => i.name || catalogItem(i.type)?.name || i.type),
     num('w', 'Ширина', { min: 0.05, max: 30 }),
     num('d', 'Глубина', { min: 0.05, max: 30 }),
     num('h', 'Высота', { min: 0.01, max: 20 }),
@@ -197,6 +198,7 @@ export const SCHEMAS = {
   ],
   roof: [
     select('type', 'Тип', ROOF_TYPES),
+    select('cover', 'Покрытие', ROOF_COVERS, { get: (r) => r.cover || 'metal', visible: (r) => r.type !== 'flat' }),
     num('pitch', 'Уклон', { unit: '°', min: 0, max: 60, step: 1, visible: (r) => r.type !== 'flat' }),
     num('overhang', 'Свес', { min: 0, max: 2 }),
     num('w', 'Ширина (вдоль конька)', { min: 1, max: 60 }),
@@ -269,4 +271,5 @@ export const LEVEL_SCHEMA = [
 export const PROJECT_SCHEMA = [
   { type: 'text', label: 'Название проекта', get: (p) => p.name, set: (p, v) => (p.name = v) },
   num('foundation', 'Высота цоколя', { min: 0, max: 2, step: 0.05 }),
+  select('facade', 'Отделка фасада', FACADE_FINISHES, { get: (p) => p.facade || 'plaster' }),
 ];

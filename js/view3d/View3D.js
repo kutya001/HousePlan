@@ -9,6 +9,8 @@ import { DoorAnimator } from './doors.js';
 import { buildScene, disposeTree, applyCutaway, isShown } from './SceneBuilder.js';
 import { siteGeo, solarPosition, azimuthVector } from '../geometry/sun.js';
 import { highlighted } from './materials.js';
+import { Lamps } from './lamps.js';
+import { onModelLoaded } from './models.js';
 import { levelElevation, getEntity, SITE_LEVEL, groundLevel } from '../model/project.js';
 
 export class View3D {
@@ -61,6 +63,9 @@ export class View3D {
 
     this.doors = new DoorAnimator();
     this.character = new CharacterMode(this);
+    this.lamps = new Lamps(this);
+    // своя модель догрузилась из хранилища — пересобрать сцену
+    onModelLoaded(() => this.invalidate(60));
 
     this.root = null;
     this.refMeshes = new Map();
@@ -74,9 +79,9 @@ export class View3D {
     // разрез по этажу — видимость готовых групп, без пересборки
     bus.on('level:changed', () => this.applyCutaway());
     bus.on('settings:changed', ({ key }) => {
-      if (key.startsWith('sun')) this.applySun();
+      if (key.startsWith('sun') || key === 'windowGlow') this.applySun();
       if (key === 'cutaway') this.applyCutaway();
-      if (['roofs3d', 'edges', 'furniture3d'].includes(key) || key.startsWith('layer_')) this.invalidate();
+      if (['roofs3d', 'edges', 'furniture3d', 'textures'].includes(key) || key.startsWith('layer_')) this.invalidate();
       if (key === 'shadows') {
         this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
         this.invalidate();
@@ -123,6 +128,7 @@ export class View3D {
     const s = this.app.state;
     applyCutaway(this.root, this.app.project, s.activeLevelId, s.settings.cutaway || this.character.cutaway);
     this.character.cam?.resetFade();
+    this.lamps?._assign();
   }
 
   rebuild() {
@@ -138,6 +144,7 @@ export class View3D {
       cutaway: s.cutaway || this.character.cutaway,
       roofs: s.roofs3d,
       furniture: s.furniture3d,
+      textures: s.textures !== false,
       layers: s,
       edges: s.edges,
     });
@@ -152,6 +159,7 @@ export class View3D {
         o.userData.baseMaterial = o.material;
       }
     });
+    this.lamps.collect();
     this.applySun(); // и тени подгоняет под дом
     this._applyHighlight();
     this.doors.attach(this.root);
@@ -291,6 +299,7 @@ export class View3D {
     this.doors.update(dt);
     if (this.walking) this.character.update(dt);
     else this.controls.update();
+    this.lamps.tick();
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);
   }
@@ -403,8 +412,36 @@ export class View3D {
     this.controls.update();
   }
 
-  screenshot() {
-    this.renderer.render(this.scene, this.camera);
-    return this.renderer.domElement.toDataURL('image/png');
+  /**
+   * Снимок 3D-вида. scale > 1 — высокое качество: кадр рендерится крупнее
+   * экрана (до 4096 px по длинной стороне) с более чёткими тенями.
+   */
+  screenshot({ scale = 1 } = {}) {
+    const r = this.renderer;
+    if (scale <= 1) {
+      r.render(this.scene, this.camera);
+      return r.domElement.toDataURL('image/png');
+    }
+    const prevRatio = r.getPixelRatio();
+    const size = r.getSize(new THREE.Vector2());
+    const k = Math.min(scale, 4096 / Math.max(size.x, size.y));
+    const shadow = this.sun.shadow;
+    const prevMap = shadow.mapSize.clone();
+    try {
+      r.setPixelRatio(k);
+      r.setSize(size.x, size.y, false);
+      shadow.mapSize.set(4096, 4096);
+      shadow.map?.dispose();
+      shadow.map = null;
+      r.render(this.scene, this.camera);
+      return r.domElement.toDataURL('image/png');
+    } finally {
+      r.setPixelRatio(prevRatio);
+      r.setSize(size.x, size.y, false);
+      shadow.mapSize.copy(prevMap);
+      shadow.map?.dispose();
+      shadow.map = null;
+      r.render(this.scene, this.camera);
+    }
   }
 }

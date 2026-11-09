@@ -105,6 +105,7 @@ export function createRoof(levelId, x, y, w, d, opts = {}) {
     pitch: opts.pitch ?? DEFAULTS.roof.pitch,
     overhang: opts.overhang ?? DEFAULTS.roof.overhang,
     color: opts.color ?? COLORS.roof,
+    ...(opts.cover ? { cover: opts.cover } : {}),
   };
 }
 

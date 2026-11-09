@@ -166,6 +166,48 @@ export function mergeGeometries(geoms) {
   return out;
 }
 
+/**
+ * UV в метрах по плоскости каждой грани: u — по горизонтали вдоль грани,
+ * v — вверх по грани (у пола — по осям плана). Нужно для текстур.
+ */
+export function planarUV(geo) {
+  if (!geo) return geo;
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const pos = g.attributes.position;
+  const uv = new Float32Array(pos.count * 2);
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const t1 = new THREE.Vector3();
+  const t2 = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  const p = new THREE.Vector3();
+  for (let i = 0; i + 2 < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    c.fromBufferAttribute(pos, i + 2);
+    n.subVectors(b, a).cross(c.clone().sub(a));
+    if (n.lengthSq() < 1e-14) continue;
+    n.normalize();
+    if (Math.abs(n.y) > 0.995) {
+      t1.set(1, 0, 0);
+      t2.set(0, 0, 1);
+    } else {
+      t1.crossVectors(up, n).normalize();
+      t2.crossVectors(n, t1).normalize();
+      if (t2.y < 0) t2.negate();
+    }
+    for (let k = 0; k < 3; k++) {
+      p.fromBufferAttribute(pos, i + k);
+      uv[(i + k) * 2] = p.dot(t1);
+      uv[(i + k) * 2 + 1] = p.dot(t2);
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
+
 /** Коробка по центру низа: удобно для мебели. */
 export function box(w, h, d, x = 0, y = 0, z = 0) {
   const g = new THREE.BoxGeometry(Math.max(w, 0.001), Math.max(h, 0.001), Math.max(d, 0.001));

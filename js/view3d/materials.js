@@ -1,11 +1,16 @@
 /** Кэш материалов: один материал на цвет, отдельно — подсветка выделения. */
 import * as THREE from 'three';
+import { patternTexture } from './textures.js';
+
+/** Текстуры в 3D (настройка «Текстуры»): выставляет сборка сцены. */
+export const TEX = { on: true };
 
 const cache = new Map();
 const highlightCache = new Map();
 
 export function mat(color, opts = {}) {
-  const key = `${color}|${opts.roughness ?? 0.85}|${opts.metalness ?? 0}|${opts.opacity ?? 1}|${opts.emissive ?? ''}`;
+  const map = TEX.on && opts.map ? opts.map : '';
+  const key = `${color}|${opts.roughness ?? 0.85}|${opts.metalness ?? 0}|${opts.opacity ?? 1}|${opts.emissive ?? ''}|${map}`;
   if (!cache.has(key)) {
     const m = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color),
@@ -21,6 +26,7 @@ export function mat(color, opts = {}) {
       polygonOffsetFactor: 0,
       polygonOffsetUnits: 1,
     });
+    if (map) m.map = patternTexture(map);
     if (opts.emissive) {
       m.emissive = new THREE.Color(opts.emissive);
       m.emissiveIntensity = opts.emissiveIntensity ?? 0.6;
@@ -42,8 +48,12 @@ export const lampGlowMat = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide,
 });
 
-export function setLampGlow(k) {
+export function setLampGlow(k, windows = true) {
   lampGlowMat.emissiveIntensity = 1.6 * k;
+  const g = glassMat();
+  g.emissive = g.emissive || new THREE.Color();
+  g.emissive.set('#ffc477');
+  g.emissiveIntensity = windows ? 0.85 * k : 0;
 }
 
 export function glassMat() {

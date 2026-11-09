@@ -1,7 +1,8 @@
 /** Перекрытия (полы комнат с проёмами под лестницы), лестницы и крыши. */
 import * as THREE from 'three';
-import { extrudePolygon, prism3D, mergeGeometries, mesh, cylinder, box } from '../meshUtils.js';
-import { mat } from '../materials.js';
+import { extrudePolygon, prism3D, mergeGeometries, mesh, cylinder, box, planarUV } from '../meshUtils.js';
+import { mat, TEX } from '../materials.js';
+import { FLOOR_TEXTURE } from '../textures.js';
 import { COLORS, FLOOR_MATERIALS, TREAD, stairStyle } from '../../model/defaults.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { roofGeometry } from '../../geometry/roofGeometry.js';
@@ -34,10 +35,11 @@ export function buildFloors(project, level, base, index) {
     const inner = holes.filter((h) => h.every((p) => pointInPolygon(p, room.points)));
     // чистый пол на несколько миллиметров выше верха стен этажа ниже и цоколя: иначе
     // их верхние грани лежат в одной плоскости с полом и «моргают» (z-fighting)
-    const geo = extrudePolygon(room.points, y0, base + FLOOR_LIFT, inner);
+    let geo = extrudePolygon(room.points, y0, base + FLOOR_LIFT, inner);
     if (!geo) continue;
     const color = (FLOOR_MATERIALS[room.floor] || FLOOR_MATERIALS.laminate).color;
-    group.add(mesh(geo, mat(color, { roughness: 0.7 }), { kind: 'room', id: room.id }, { cast: index > 0 }));
+    if (TEX.on) geo = planarUV(geo);
+    group.add(mesh(geo, mat(color, { roughness: 0.7, map: FLOOR_TEXTURE[room.floor] || 'laminate' }), { kind: 'room', id: room.id }, { cast: index > 0 }));
   }
   // дно котлована под подвалом — бетонная плита по пятну стен
   if (isBasement(level)) {
@@ -225,9 +227,11 @@ export function buildRoof(project, roof) {
       surf.push(prism3D(s.poly, { x: 0, y: -0.2, z: 0 }));
     }
   }
-  const sg = mergeGeometries(surf);
+  let sg = mergeGeometries(surf);
   if (sg) {
-    const m = mesh(sg, mat(roof.color || COLORS.roof, { roughness: 0.75 }), ref);
+    const cover = roof.type === 'flat' ? 'concrete' : roof.cover || 'metal';
+    if (TEX.on && cover !== 'plain') sg = planarUV(sg);
+    const m = mesh(sg, mat(roof.color || COLORS.roof, { roughness: 0.75, map: cover === 'plain' ? null : cover }), ref);
     m.userData.edges = true;
     group.add(m);
   }
@@ -247,9 +251,10 @@ export function buildRoof(project, roof) {
     n.multiplyScalar(0.3);
     gab.push(prism3D(poly, { x: n.x, y: n.y, z: n.z }));
   }
-  const gg = mergeGeometries(gab);
+  let gg = mergeGeometries(gab);
   if (gg) {
-    const m = mesh(gg, mat(COLORS.facade), ref);
+    if (TEX.on) gg = planarUV(gg);
+    const m = mesh(gg, mat(COLORS.facade, { map: project.facade || 'plaster' }), ref);
     m.userData.edges = true;
     group.add(m);
   }
