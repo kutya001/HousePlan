@@ -15,7 +15,7 @@ import { CATALOG, catalogItem } from '../model/catalog.js';
 import { DESCENTS } from '../geometry/cellarEntry.js';
 import { FACADE_FINISHES, ROOF_COVERS } from '../model/finishes.js';
 import { RAILINGS } from '../geometry/stairRails.js';
-import { DEFAULTS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
+import { DEFAULTS, COLORS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
 import { projectOnSegment, dist } from '../core/geometry.js';
@@ -24,11 +24,24 @@ export const AI_FORMAT = 'houseplan-ai';
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const pt = (p) => [r3(p.x), r3(p.y)];
+const isColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 
 // ── Экспорт ──────────────────────────────────────────────────────────────
 
-/** Проект → формат «houseplan-ai» (его же понимает импорт). */
-export function toExchange(project) {
+/**
+ * Проект → формат «houseplan-ai» (его же понимает импорт).
+ * @param opts.ids — дать id всем элементам (o1, r1, s1, f1, k1, g1, z1): по ним
+ *                   ИИ-помощник адресует правки, не пересчитывая номера в списках.
+ * @param opts.idMap — Map: id элемента проекта → { id, level } в этом JSON (level — номер этажа или 'site').
+ */
+export function toExchange(project, { ids: withIds = false, idMap = null } = {}) {
+  const counters = {};
+  const tag = (prefix, obj, ent, level) => {
+    if (!withIds) return obj;
+    const id = `${prefix}${(counters[prefix] = (counters[prefix] || 0) + 1)}`;
+    if (ent) idMap?.set(ent.id, { id, level });
+    return { id, ...obj };
+  };
   const out = {
     format: AI_FORMAT,
     version: 1,
@@ -43,9 +56,9 @@ export function toExchange(project) {
     },
     levels: [],
     outdoor: [],
-    zones: project.zones.map((z) => ({ material: z.material, points: z.points.map(pt) })),
+    zones: [],
   };
-  for (const level of project.levels) {
+  project.levels.forEach((level, li) => {
     const ids = new Map();
     const walls = project.walls.filter((w) => w.levelId === level.id);
     const lv = {
@@ -57,23 +70,24 @@ export function toExchange(project) {
       walls: walls.map((w, i) => {
         const id = `w${i + 1}`;
         ids.set(w.id, id);
-        return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}) };
+        idMap?.set(w.id, { id, level: li });
+        return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}), ...(isColor(w.color) ? { color: w.color } : {}) };
       }),
       openings: [],
       rooms: project.rooms
         .filter((r) => r.levelId === level.id)
-        .map((r) => ({ name: r.name, floor: r.floor, ...(r.heatedFloor ? { heatedFloor: true } : {}), points: r.points.map(pt) })),
+        .map((r) => tag('r', { name: r.name, floor: r.floor, ...(r.heatedFloor ? { heatedFloor: true } : {}), points: r.points.map(pt) }, r, li)),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
-        .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) })),
-      furniture: project.items.filter((it) => it.levelId === level.id).map(itemOut),
+        .map((s) => tag('s', { shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) }, s, li)),
+      furniture: project.items.filter((it) => it.levelId === level.id).map((it) => tag('f', itemOut(it), it, li)),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
-        .map((r) => ({ type: r.type, x: r3(r.x), y: r3(r.y), w: r3(r.w), d: r3(r.d), rotation: r3(r.rotation || 0), pitch: r3(r.pitch), overhang: r3(r.overhang), ...(r.cover ? { cover: r.cover } : {}) })),
+        .map((r) => tag('k', { type: r.type, x: r3(r.x), y: r3(r.y), w: r3(r.w), d: r3(r.d), rotation: r3(r.rotation || 0), pitch: r3(r.pitch), overhang: r3(r.overhang), ...(r.cover ? { cover: r.cover } : {}), ...(isColor(r.color) && r.color.toLowerCase() !== COLORS.roof.toLowerCase() ? { color: r.color } : {}) }, r, li)),
     };
     for (const o of project.openings) {
       if (!ids.has(o.wallId)) continue;
-      lv.openings.push({
+      lv.openings.push(tag('o', {
         wall: ids.get(o.wallId),
         type: o.kind,
         style: o.style,
@@ -84,11 +98,12 @@ export function toExchange(project) {
         ...(o.flipSide ? { flipSide: true } : {}),
         ...(o.flipHinge ? { flipHinge: true } : {}),
         ...(o.descent && o.descent !== 'out' ? { descent: o.descent } : {}),
-      });
+      }, o, li));
     }
     out.levels.push(lv);
-  }
-  out.outdoor = project.items.filter((it) => it.levelId === SITE_LEVEL).map(itemOut);
+  });
+  out.outdoor = project.items.filter((it) => it.levelId === SITE_LEVEL).map((it) => tag('g', itemOut(it), it, 'site'));
+  out.zones = project.zones.map((z) => tag('z', { material: z.material, points: z.points.map(pt) }, z, 'site'));
   return out;
 }
 
@@ -100,6 +115,12 @@ function itemOut(it) {
   if (!c || Math.abs(c.d - it.d) > 1e-3) o.d = r3(it.d);
   if (!c || Math.abs(c.h - it.h) > 1e-3) o.h = r3(it.h);
   if (it.elevation && Math.abs((c?.elevation ?? 0) - it.elevation) > 1e-3) o.elevation = r3(it.elevation);
+  if (isColor(it.color) && it.color.toLowerCase() !== String(c?.color || '').toLowerCase()) o.color = it.color;
+  // своя 3D-модель: ссылка на файл в хранилище браузера и её название
+  if (it.model) {
+    o.model = it.model;
+    if (it.name) o.name = it.name;
+  }
   return o;
 }
 
@@ -318,6 +339,7 @@ function importLevel(project, lvl, l, k, warnings) {
       kind,
       thickness: clamp(num(w.thickness, DEFAULTS.wall[kind].thickness / k) * k, 0.05, 1.5),
       height: w.height ? num(w.height, 0) * k || null : null,
+      color: isColor(w.color) ? w.color : null,
     });
     walls.push(wall);
     ids.set(String(w.id ?? i + 1), wall);
@@ -401,6 +423,7 @@ function importLevel(project, lvl, l, k, warnings) {
         pitch: clamp(num(r.pitch, DEFAULTS.roof.pitch), 0, 60),
         overhang: clamp(num(r.overhang, DEFAULTS.roof.overhang / k) * k, 0, 2),
         ...(ROOF_COVERS[r.cover] ? { cover: r.cover } : {}),
+        ...(isColor(r.color) ? { color: r.color } : {}),
       }),
     );
   }
@@ -418,6 +441,11 @@ function addItem(project, levelId, it, k, warnings) {
   if (it.d) item.d = clamp(num(it.d, item.d) * k, 0.05, 30);
   if (it.h) item.h = clamp(num(it.h, item.h) * k, 0.01, 15);
   if (it.elevation) item.elevation = num(it.elevation, 0) * k;
+  if (isColor(it.color)) item.color = it.color;
+  if (it.model && typeof it.model === 'string') {
+    item.model = it.model;
+    if (it.name) item.name = String(it.name);
+  }
   project.items.push(item);
 }
 

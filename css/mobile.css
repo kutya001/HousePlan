@@ -813,6 +813,7 @@ body.walking .view3d-bar {
   .sheet-head {
     order: -1;
     position: relative;
+    border-bottom: 1px solid var(--line);
     padding-top: 14px;
     touch-action: none;
     cursor: grab;
@@ -835,7 +836,10 @@ body.walking .view3d-bar {
     top: 10px;
   }
   .side-tabs {
-    padding: 4px 52px 0 8px;
+    /* отступ справа — полем, а не padding: иначе вкладки уезжают под крестик */
+    margin-right: 48px;
+    padding: 4px 0 0 8px;
+    border-bottom: 0;
     overflow-x: auto;
     scrollbar-width: none;
     gap: 0;
@@ -1111,5 +1115,19 @@ body.walking .view3d-bar {
   from {
     transform: translateY(40px);
     opacity: 0;
+  }
+}
+
+/* ИИ-помощник на телефоне: поле ввода крупнее, без автозума iOS */
+@media (max-width: 760px) {
+  .ai-input {
+    font-size: 16px;
+  }
+  .ai-send {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .ai-composer {
+    padding-bottom: calc(10px + var(--safe-bottom));
   }
 }

@@ -3,6 +3,8 @@ import { SPAWN_MODES } from '../model/defaults.js';
 import { LAYERS } from '../model/layers.js';
 import { h, icon } from './dom.js';
 import { openModal } from './feedback.js';
+import { openAiSettings } from './AiKeyDialog.js';
+import { getKey, maskKey } from '../ai/aiStore.js';
 
 const THEMES = [
   ['light', 'Светлая', 'sun'],
@@ -107,6 +109,17 @@ export class SettingsDialog {
         ),
       ),
       ...TOGGLES.map(([title, rows]) => h('section', {}, h('h3', {}, title), ...rows.map(([k, l]) => toggle(k, l)))),
+      h(
+        'section',
+        {},
+        h('h3', {}, 'ИИ-помощник'),
+        h(
+          'div',
+          { class: 'settings-row' },
+          h('span', {}, getKey() ? `Ключ API: ${maskKey(getKey())} — только в этом браузере` : 'Ключ API Claude не подключён'),
+          h('button', { class: 'btn btn-small', onclick: () => openAiSettings(app) }, icon('key', 14), getKey() ? 'Изменить' : 'Подключить'),
+        ),
+      ),
       h(
         'section',
         {},

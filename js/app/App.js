@@ -162,7 +162,7 @@ export class App {
       if (hasFile(e)) e.preventDefault();
     });
     window.addEventListener('drop', async (e) => {
-      if (!hasFile(e) || e.target.closest?.('.xch-input')) return;
+      if (!hasFile(e) || e.target.closest?.('.xch-input, .ai-body')) return;
       e.preventDefault();
       const file = e.dataTransfer.files[0];
       if (!file || this.modalOpen) return;

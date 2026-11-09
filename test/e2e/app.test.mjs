@@ -8,6 +8,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { startServer } from '../serve.mjs';
+import { sseStream } from '../sse.mjs';
 
 // require понимает и локальный node_modules, и глобально установленный playwright
 const { chromium } = createRequire(import.meta.url)('playwright');
@@ -122,6 +123,52 @@ test('варианты: сохранить и сравнить', async () => {
   await page.waitForSelector('.var-compare');
   assert.equal(await page.locator('.var-card').count(), 1);
   await page.keyboard.press('Escape');
+});
+
+test('ИИ-помощник (API подменён): ключ, постройка, правка, отмена', async () => {
+  const requests = [];
+  const replies = [];
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-methods': 'GET,POST' } });
+    requests.push({ url: req.url(), headers: req.headers(), body: req.postDataJSON?.() ?? null });
+    if (req.url().includes('/v1/models')) {
+      return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ data: [{ id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5' }] }) });
+    }
+    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream' }, body: replies.shift() });
+  });
+  const example = await page.evaluate(() => import('./js/io/aiPrompt.js').then((m) => m.EXAMPLE));
+  await page.evaluate(() => houseplan.ui.side.ai.focus());
+  await page.click('#tab-ai .ai-card .btn-primary');
+  await page.fill('.ai-key-input', `sk-ant-api03-${'t'.repeat(40)}`);
+  await page.click('.ai-settings .btn-primary');
+  await page.waitForSelector('.ai-settings', { state: 'detached' });
+
+  replies.push(sseStream({ text: 'Строю дом 8×6.', tool: 'build_project', input: { summary: 'Дом 8×6', project: example } }));
+  await page.fill('.ai-input', 'Дом 8×6: гостиная, спальня, санузел');
+  await page.press('.ai-input', 'Enter');
+  await page.waitForSelector('.ai-result');
+  assert.equal(await page.evaluate(() => houseplan.project.walls.length), 6);
+
+  replies.push(sseStream({ text: 'Кладу плитку.', tool: 'edit_project', input: { summary: 'Плитка в гостиной', patch: [{ op: 'replace', path: '/levels/0/rooms/r1/floor', value: 'tile' }] } }));
+  await page.fill('.ai-input', 'Плитку в гостиную');
+  await page.press('.ai-input', 'Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.ai-result').length === 2);
+  assert.equal(await page.evaluate(() => houseplan.project.rooms.find((r) => r.name === 'Гостиная').floor), 'tile');
+
+  const msg = requests.filter((r) => r.url.includes('/v1/messages'));
+  assert.equal(msg.length, 2);
+  assert.equal(msg[0].headers['anthropic-dangerous-direct-browser-access'], 'true');
+  assert.match(msg[0].headers['x-api-key'], /^sk-ant-api03-t+$/);
+  assert.equal(msg[1].body.model, 'claude-sonnet-5-5');
+  assert.match(msg[1].body.messages.at(-1).content.at(-1).text, /"id":"r1"/);
+  // ключ — только в localStorage, не в проекте и не в настройках
+  assert.ok(!(await page.evaluate(() => JSON.stringify(houseplan.project).includes('sk-ant'))));
+
+  await page.click('.ai-msg.bot:last-child .ai-undo');
+  assert.equal(await page.evaluate(() => houseplan.project.rooms.find((r) => r.name === 'Гостиная').floor), 'laminate');
+  await page.unroute('https://api.anthropic.com/**');
 });
 
 test('в консоли нет ошибок', () => {

@@ -136,6 +136,23 @@ export class ExchangeDialog {
         h('li', {}, 'Скопируйте промпт и отправьте его нейросети (ChatGPT, Claude, Gemini, DeepSeek, GigaChat…).'),
         h('li', {}, 'Ответ ИИ целиком вставьте во вкладке «Импорт» — дом появится на плане и в 3D.'),
       ),
+      h(
+        'p',
+        { class: 'xch-tip' },
+        icon('spark', 16),
+        h('span', {}, 'Есть ключ API Claude? Помощник работает прямо в программе — без копирования: '),
+        h(
+          'button',
+          {
+            class: 'link-btn',
+            onclick: () => {
+              modal.close();
+              app.ui.side.ai.focus(wishes.value.trim());
+            },
+          },
+          'открыть вкладку «ИИ»',
+        ),
+      ),
       h('label', { class: 'xch-label' }, 'Каким должен быть дом'),
       wishes,
       chips,

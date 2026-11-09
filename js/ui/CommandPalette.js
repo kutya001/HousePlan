@@ -50,7 +50,10 @@ export class CommandPalette {
     cmd('Настройки', 'settings', () => app.ui.settings.open(), 'Приложение');
     cmd('Своя 3D-модель (.glb): загрузить и поставить', 'cube', () => app.file.importModel(), 'Каталог');
     cmd('Сохранить проект в файл', 'save', () => app.file.save(), 'Ctrl+S');
-    cmd('Построить дом с ИИ (промпт для нейросети)', 'spark', () => app.ui.exchange.open('ai'), 'Файл');
+    cmd('ИИ-помощник: построить или изменить дом словами', 'spark', () => app.ui.side.ai.focus(), 'ИИ');
+    cmd('ИИ: ключ API и модель Claude', 'key', () => app.ui.side.ai.settings(), 'ИИ');
+    cmd('ИИ: новый разговор', 'plus', () => app.ui.side.ai.newChat(), 'ИИ');
+    cmd('Промпт для другой нейросети (скопировать в чат)', 'chat', () => app.ui.exchange.open('ai'), 'Файл');
     cmd('Импорт проекта: ответ ИИ или JSON', 'swap', () => app.ui.exchange.open('import'), 'Файл');
     cmd('Экспорт проекта в JSON', 'download', () => app.ui.exchange.open('export'), 'Файл');
     cmd('Открыть файл проекта', 'open', () => app.file.open(), 'Ctrl+O');

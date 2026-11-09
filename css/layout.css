@@ -228,8 +228,10 @@ textarea {
 
 .side-tabs {
   display: flex;
-  gap: 4px;
-  padding: 8px 14px 0;
+  gap: 0;
+  padding: 8px 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
   border-bottom: 1px solid var(--line);
 }
 
@@ -387,6 +389,12 @@ textarea {
 @media (max-width: 1180px) {
   /* название проекта на узкой шапке не помещается — оно есть в свойствах проекта */
   .topbar-project {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar-ai span:not(.icon) {
     display: none;
   }
 }

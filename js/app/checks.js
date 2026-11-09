@@ -34,8 +34,10 @@ export class ProjectChecks {
     this._timer = setTimeout(() => this.run(), delay);
   }
 
-  run() {
+  /** @param opts.quiet — без всплывающего уведомления (итог покажет тот, кто вызвал) */
+  run({ quiet = false } = {}) {
     clearTimeout(this._timer);
+    if (quiet) this._announce = false;
     let issues = [];
     try {
       issues = checkProject(this.app.project);
