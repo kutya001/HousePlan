@@ -1,0 +1,23 @@
+name: Тесты
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Модульные тесты (геометрия, проверка, смета, обмен)
+        run: npm test
+      - name: Браузер для сквозных тестов
+        run: npx playwright install --with-deps chromium
+      - name: Сквозные тесты в Chromium
+        run: npm run test:e2e
