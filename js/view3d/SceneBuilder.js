@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { levelElevation, levelIndex, SITE_LEVEL, groundLevel } from '../model/project.js';
 import { buildSite } from './builders/buildSite.js';
 import { buildWalls } from './builders/buildWalls.js';
-import { buildFloors, buildStairs, buildRoof } from './builders/buildStructure.js';
+import { buildFloors, buildStairs, buildStairGuards, buildRoof } from './builders/buildStructure.js';
 import { buildItem } from './builders/buildItems.js';
 import { edgeMaterial } from './materials.js';
 
@@ -33,6 +33,7 @@ export function buildScene(project, opts) {
     g.add(buildFloors(project, level, base, i));
     g.add(buildWalls(project, level.id, base, { plinth: i === 0, porch: level === ground }));
     g.add(buildStairs(project, level.id, base));
+    g.add(buildStairGuards(project, level.id, base));
     if (opts.furniture) for (const it of project.items.filter((x) => x.levelId === level.id)) g.add(buildItem(it, base));
     g.userData.levelIndex = i;
     root.add(g);

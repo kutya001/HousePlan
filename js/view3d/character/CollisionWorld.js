@@ -11,14 +11,15 @@
 import { computeWallGeometry, wallPieces3D, clipWallRange } from '../../geometry/wallGeometry.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { porchSteps } from '../../geometry/porch.js';
-import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf } from '../../core/geometry.js';
+import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf, toWorld } from '../../core/geometry.js';
 import { levelElevation, wallHeight, levelBelow, levelTop, groundLevel, isBasement, SITE_LEVEL } from '../../model/project.js';
 import { excavationOutlines, inExcavation } from '../../geometry/excavation.js';
 import { cellarEntries, RAIL_H } from '../../geometry/cellarEntry.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
-import { stairRise3D } from '../builders/buildStructure.js';
 import { stairStyle, TREAD } from '../../model/defaults.js';
+import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT } from '../../geometry/stairRails.js';
+import { stairRise3D, wallPolys } from '../builders/buildStructure.js';
 
 /** Предметы, сквозь которые можно пройти, — только опора (ковёр) или вовсе ничего. */
 const FLAT = new Set(['rug']);
@@ -100,6 +101,17 @@ export class CollisionWorld {
           const th = style === 'solid' ? st.top : st.thin ? 0.05 : st.landing ? TREAD.landing : TREAD[style];
           this._add(st.poly, base + st.top - th, base + st.top, { kind: 'stair', ref: { kind: 'stair', id: s.id } });
         }
+        // перила марша — не упасть с лестницы вбок
+        const rails = stairRails(s, lay, wallPolys(project, level.id), null);
+        for (const l of rails.sides) this._addRail(l, base, RAIL_HEIGHT + 0.1);
+      }
+      // ограждение проёмов над лестницами с этажа ниже
+      if (below) {
+        const upper = wallPolys(project, level.id);
+        for (const s of project.stairs.filter((x) => x.levelId === below.id)) {
+          const { guards } = stairRails(s, stairLayout(s, stairRise3D(project, s)), [], upper);
+          for (const l of guards) this._addRail(l.map((p) => ({ ...p, h: 0 })), base, GUARD_HEIGHT + 0.05);
+        }
       }
 
       // мебель этажа
@@ -145,11 +157,56 @@ export class CollisionWorld {
     }
   }
 
+  /** Тонкая ограда вдоль ломаной: куски по ~0,3 м, низ — по высоте точек (h над base). */
+  _addRail(line, base, height) {
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i];
+      const b = line[i + 1];
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
+      if (L < 0.02) continue;
+      const nx = (-(b.y - a.y) / L) * 0.03;
+      const ny = ((b.x - a.x) / L) * 0.03;
+      const n = Math.max(1, Math.ceil(L / 0.3));
+      for (let k = 0; k < n; k++) {
+        const t0 = k / n;
+        const t1 = (k + 1) / n;
+        const p0 = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
+        const p1 = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
+        const h0 = Math.min(a.h + (b.h - a.h) * t0, a.h + (b.h - a.h) * t1);
+        const poly = [
+          { x: p0.x + nx, y: p0.y + ny },
+          { x: p1.x + nx, y: p1.y + ny },
+          { x: p1.x - nx, y: p1.y - ny },
+          { x: p0.x - nx, y: p0.y - ny },
+        ];
+        this._add(poly, base + h0 + 0.02, base + h0 + height, { kind: 'rail' });
+      }
+    }
+  }
+
   _addItem(it, base) {
     const y0 = base + (it.elevation || 0);
     const ref = { kind: 'item', id: it.id };
     if (TRUNK.has(it.type)) {
       this._add(circlePolygon(it.x, it.y, Math.max(0.12, Math.min(it.w, it.d) * 0.06), 8), y0, y0 + it.h, { kind: 'item', ref });
+      return;
+    }
+    if (it.type === 'balcony') {
+      // плита — пол, по трём сторонам — ограждение
+      const pts = [
+        [-it.w / 2 + 0.04, -it.d / 2 + 0.05],
+        [-it.w / 2 + 0.04, it.d / 2 - 0.04],
+        [it.w / 2 - 0.04, it.d / 2 - 0.04],
+        [it.w / 2 - 0.04, -it.d / 2 + 0.05],
+      ].map(([x, y]) => ({ ...toWorld({ x, y }, it.x, it.y, it.rotation || 0), h: 0 }));
+      this._add(rectCorners(it.x, it.y, it.w, it.d, it.rotation || 0), y0 - 0.16, y0, { kind: 'floor', ref, noSide: true });
+      this._addRail(pts, y0, (it.h || 1) + 0.05);
+      return;
+    }
+    if (it.type === 'carport') {
+      const corners = rectCorners(it.x, it.y, it.w - 0.2, it.d - 0.2, it.rotation || 0);
+      for (const c of corners) this._add(circlePolygon(c.x, c.y, 0.08, 6), y0, y0 + it.h, { kind: 'item', ref });
+      this._add(rectCorners(it.x, it.y, it.w, it.d, it.rotation || 0), y0 + it.h - 0.3, y0 + it.h, { kind: 'item', ref });
       return;
     }
     if (POSTS.has(it.type)) {
@@ -182,7 +239,7 @@ export class CollisionWorld {
     // земля — везде, кроме котлована подвала; ниже — «бездна», чтобы не падать вечно
     let best = maxY >= -1e-4 && !inExcavation(this.pits, { x, y: z }) ? { y: 0, solid: null } : { y: -50, solid: null };
     for (const s of this.solids) {
-      if (s.y1 > maxY + 1e-4 || s.y1 <= best.y || !this._active(s)) continue;
+      if (s.y1 > maxY + 1e-4 || s.y1 <= best.y || s.kind === 'rail' || !this._active(s)) continue;
       if (this._contains(s, x, z)) best = { y: s.y1, solid: s };
     }
     return best;

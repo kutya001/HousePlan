@@ -24,7 +24,8 @@ const OPENING_LABEL = { door: 'Дверь', window: 'Окно', arch: 'Проё�
 
 const TOL = 0.03; // допуск: на 3 см можно «касаться» — так ставят мебель вплотную
 const TRUNK = new Set(['tree', 'conifer', 'fruit_tree']);
-const POSTS = new Set(['gazebo', 'greenhouse', 'playground']);
+const POSTS = new Set(['gazebo', 'greenhouse', 'playground', 'carport']);
+const isAttached = (it) => !!catalogItem(it.type)?.attached; // балкон, козырёк — снаружи у стены
 const SOFT = new Set(['bush', 'rug']); // крона куста и ковёр никому не мешают
 const SEATS = new Set(['chair', 'office_chair', 'bench', 'armchair']);
 const TABLES = new Set(['dining_table', 'round_table', 'desk', 'kitchen_island', 'coffee_table']);
@@ -238,6 +239,7 @@ export function checkProject(project) {
     const shapes = new Map(items.map((it) => [it.id, itemShape(it)]));
 
     checkItemPairs(items, shapes, lid, push);
+    checkAttached(items, geoms, lid, push);
     checkItemsWalls(project, items, shapes, geoms, openingsByWall, lid, push);
     checkItemsStairs(items, shapes, stairs, holes, lid, push);
     checkStairs(stairs, geoms, openingsByWall, project, lid, push);
@@ -265,6 +267,7 @@ export function checkProject(project) {
         const sh = shapes.get(it.id);
         const c = { x: it.x, y: it.y };
         if (rooms.some((r) => pointInPolygon(c, r.points))) continue;
+        if (isAttached(it)) continue; // балкон и козырёк и должны быть снаружи
         if (stairs.some((st) => pointInPolygon(c, st.outline))) continue;
         const outdoor = !!catalogItem(it.type)?.outdoor;
         if (level === ground) {
@@ -300,6 +303,33 @@ export function checkProject(project) {
 
   const rank = { error: 0, warn: 1 };
   return issues.sort((a, b) => rank[a.level] - rank[b.level]);
+}
+
+/** Балкон и козырёк должны примыкать задней стороной к стене. */
+function checkAttached(items, geoms, lid, push) {
+  const polys = [...geoms.values()].map((g) => g.poly);
+  for (const it of items) {
+    if (!isAttached(it)) continue;
+    const a = ((it.rotation || 0) * Math.PI) / 180;
+    // точка в 12 см за «спинкой» (локальная −y)
+    const back = (dx) => ({
+      x: it.x + dx * Math.cos(a) - (-it.d / 2 - 0.12) * Math.sin(a),
+      y: it.y + dx * Math.sin(a) + (-it.d / 2 - 0.12) * Math.cos(a),
+    });
+    const touches = [-it.w / 4, 0, it.w / 4].filter((dx) => polys.some((p) => pointInPolygon(back(dx), p))).length >= 2;
+    if (!touches) {
+      push({
+        id: `att:${it.id}`,
+        level: 'warn',
+        title: `${itemName(it)} не примыкает к стене`,
+        text: 'Задней стороной он должен опираться на наружную стену — поверните его спинкой к стене или придвиньте.',
+        levelId: lid,
+        refs: [{ kind: 'item', id: it.id }],
+        at: { x: it.x, y: it.y },
+        area: rectCorners(it.x, it.y, it.w, it.d, it.rotation || 0),
+      });
+    }
+  }
 }
 
 /** Предметы друг в друге. */
@@ -521,7 +551,7 @@ function checkDoors(project, level, geoms, rooms, items, shapes, stairs, lid, pu
         const nn = mul(g.n, side);
         const zone = ccw([add(pointOnWall(g, s0), mul(nn, g.half)), add(pointOnWall(g, s1), mul(nn, g.half)), add(pointOnWall(g, s1), mul(nn, g.half + 0.6)), add(pointOnWall(g, s0), mul(nn, g.half + 0.6))]);
         for (const it of pool) {
-          if (SOFT.has(it.type) || it.type === 'plant') continue;
+          if (SOFT.has(it.type) || it.type === 'plant' || isAttached(it)) continue;
           const sh = shapesOf.get(it.id);
           if (sh.y0 > LOW) continue;
           const r = deepest(sh.parts, [zone]);

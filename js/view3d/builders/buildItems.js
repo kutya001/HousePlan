@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { box, cylinder, mergeGeometries, mesh } from '../meshUtils.js';
 import { mat, glassMat } from '../materials.js';
 import { DEG } from '../../core/geometry.js';
+import { railingGeos, beam } from './railing.js';
 
 const WOOD = '#9a6b47';
 const DARK = '#2f3236';
@@ -29,7 +30,58 @@ function legs(add, w, d, h, r = 0.025, inset = 0.06, color = WOOD) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(cylinder(r, h, sx * (w / 2 - inset), 0, sz * (d / 2 - inset), 8), color);
 }
 
+const RAIL = '#3d4146';
+
+/** Ограда по ломаной в локальных координатах модели (y — высота низа). */
+function fence3(add, pts, height) {
+  const g = railingGeos(
+    pts.map(([x, z, y = 0]) => ({ x, y: z, h: y })),
+    height,
+  );
+  for (const r of g.rail) add(r, '#7a5a3f');
+  for (const m of g.metal) add(m, RAIL);
+}
+
 const B = {
+  balcony(add, w, d, h, c) {
+    // плита-консоль вровень с полом этажа и ограждение с трёх сторон
+    add(box(w, 0.16, d, 0, -0.16, 0), c);
+    add(box(w, 0.04, 0.06, 0, -0.2, d / 2 - 0.03), darken(c));
+    fence3(
+      add,
+      [
+        [-w / 2 + 0.04, -d / 2 + 0.05],
+        [-w / 2 + 0.04, d / 2 - 0.04],
+        [w / 2 - 0.04, d / 2 - 0.04],
+        [w / 2 - 0.04, -d / 2 + 0.05],
+      ],
+      h,
+    );
+  },
+  canopy(add, w, d, h, c) {
+    // наклонная кровля козырька и два кронштейна к стене
+    const p = beam({ x: 0, y: h + 0.18, z: -d / 2 }, { x: 0, y: h * 0.4, z: d / 2 }, w, 0.06);
+    if (p) add(p, c);
+    for (const sx of [-1, 1]) {
+      const x = sx * (w / 2 - 0.18);
+      const br = beam({ x, y: -0.6, z: -d / 2 + 0.03 }, { x, y: h * 0.4, z: d / 2 - 0.15 }, 0.05, 0.05);
+      if (br) add(br, RAIL);
+      add(box(0.05, 0.7, 0.05, x, -0.6, -d / 2 + 0.03), RAIL);
+    }
+  },
+  carport(add, w, d, h, c) {
+    const n = d > 4.5 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      const z = -d / 2 + 0.1 + ((d - 0.2) * i) / (n - 1);
+      for (const sx of [-1, 1]) add(box(0.1, h - 0.15, 0.1, sx * (w / 2 - 0.1), 0, z), c);
+    }
+    // обвязка по верху и прозрачная кровля с уклоном
+    for (const sx of [-1, 1]) add(box(0.1, 0.16, d, sx * (w / 2 - 0.1), h - 0.3, 0), c);
+    for (let i = 0; i < 5; i++) add(box(w, 0.06, 0.06, 0, h - 0.18 + (i / 4) * -0.12, -d / 2 + 0.05 + ((d - 0.1) * i) / 4), c);
+    const roof = beam({ x: 0, y: h, z: -d / 2 - 0.15 }, { x: 0, y: h - 0.25, z: d / 2 + 0.15 }, w + 0.3, 0.02);
+    if (roof) add(roof, '#cfe3ea', { opacity: 0.55 });
+  },
+
   sofa(add, w, d, h, c) {
     const seat = h * 0.5;
     add(box(w, seat * 0.75, d), c);

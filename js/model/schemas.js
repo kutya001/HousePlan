@@ -21,6 +21,7 @@ import {
 import { catalogItem } from './catalog.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
+import { RAILINGS } from '../geometry/stairRails.js';
 import { wallLength } from './operations.js';
 
 const num = (key, label, opts = {}) => ({
@@ -151,6 +152,13 @@ export const SCHEMAS = {
       get: (s) => stairStyle(s),
       set: (s, v) => (s.style = v),
       visible: (s) => s.shape !== 'spiral',
+    },
+    {
+      type: 'select',
+      label: 'Перила',
+      options: RAILINGS,
+      get: (s) => (RAILINGS[s.railing] ? s.railing : 'auto'),
+      set: (s, v) => (s.railing = v),
     },
     num('width', 'Ширина', { min: 0.6, max: 6 }),
     num('length', 'Длина', { min: 0.6, max: 10, visible: (s) => s.shape !== 'spiral' }),

@@ -12,6 +12,7 @@ export const CATEGORIES = [
   { id: 'kitchen', name: 'Кухня' },
   { id: 'bath', name: 'Санузел' },
   { id: 'other', name: 'Разное' },
+  { id: 'structure', name: 'Конструкции' },
   { id: 'outdoor', name: 'Участок' },
 ];
 
@@ -60,6 +61,11 @@ export const CATALOG = [
   { type: 'column', name: 'Колонна', category: 'other', w: 0.4, d: 0.4, h: 2.8, color: '#e0dcd5' },
   { type: 'piano', name: 'Пианино', category: 'other', w: 1.5, d: 0.6, h: 1.3, color: '#2f2a28', wallSnap: true },
   { type: 'treadmill', name: 'Беговая дорожка', category: 'other', w: 0.8, d: 1.9, h: 1.4, color: '#4a4d52' },
+
+  // Конструкции: балкон и козырёк крепятся к наружной стене снаружи дома
+  { type: 'balcony', name: 'Балкон', category: 'structure', w: 3.0, d: 1.2, h: 1.0, color: '#c9c3b8', wallSnap: true, attached: true },
+  { type: 'canopy', name: 'Козырёк над входом', category: 'structure', w: 2.2, d: 1.3, h: 0.16, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4 },
+  { type: 'carport', name: 'Навес для машины', category: 'structure', w: 3.6, d: 6.0, h: 2.7, color: '#6d7276', outdoor: true },
 
   // Участок
   { type: 'tree', name: 'Дерево лиственное', category: 'outdoor', w: 4.5, d: 4.5, h: 6.5, color: '#6f9d4f', outdoor: true },

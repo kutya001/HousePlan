@@ -470,6 +470,53 @@ const SYMBOLS = {
     for (let i = 1; i < n; i++) line(ctx, -w / 2, -d / 2 + (d / n) * i, w / 2, -d / 2 + (d / n) * i);
     line(ctx, 0, -d / 2, 0, d / 2);
   },
+  balcony(ctx, w, d) {
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    ctx.fill();
+    // ограждение с трёх сторон — жирной линией
+    const lw = ctx.lineWidth;
+    ctx.lineWidth = lw * 2.4;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + 0.04, -d / 2);
+    ctx.lineTo(-w / 2 + 0.04, d / 2 - 0.04);
+    ctx.lineTo(w / 2 - 0.04, d / 2 - 0.04);
+    ctx.lineTo(w / 2 - 0.04, -d / 2);
+    ctx.stroke();
+    ctx.lineWidth = lw;
+  },
+  canopy(ctx, w, d) {
+    // над головой — пунктиром
+    ctx.save();
+    ctx.setLineDash([0.15, 0.1]);
+    ctx.fillStyle = 'rgba(138, 75, 58, 0.12)';
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    fs(ctx);
+    ctx.setLineDash([]);
+    line(ctx, -w / 2, -d / 2, w / 2, d / 2);
+    line(ctx, w / 2, -d / 2, -w / 2, d / 2);
+    ctx.restore();
+  },
+  carport(ctx, w, d) {
+    ctx.save();
+    ctx.setLineDash([0.25, 0.15]);
+    ctx.fillStyle = 'rgba(190, 220, 232, 0.25)';
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    fs(ctx);
+    ctx.restore();
+    const n = d > 4.5 ? 3 : 2;
+    ctx.fillStyle = THEME.itemStroke;
+    for (let i = 0; i < n; i++) {
+      const y = -d / 2 + 0.1 + ((d - 0.2) * i) / (n - 1);
+      for (const sx of [-1, 1]) {
+        ctx.beginPath();
+        ctx.rect(sx * (w / 2 - 0.1) - 0.06, y - 0.06, 0.12, 0.12);
+        ctx.fill();
+      }
+    }
+  },
   gazebo(ctx, w, d) {
     ctx.beginPath();
     ctx.rect(-w / 2, -d / 2, w, d);

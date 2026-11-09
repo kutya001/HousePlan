@@ -8,6 +8,9 @@ import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
 import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
+import { computeWallGeometry } from '../../geometry/wallGeometry.js';
+import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT } from '../../geometry/stairRails.js';
+import { railingMesh } from './railing.js';
 
 /** Подъём чистого пола над отметкой этажа в 3D — против мерцания совпадающих граней. */
 export const FLOOR_LIFT = 0.006;
@@ -77,8 +80,32 @@ export function buildStairs(project, levelId, base) {
     const m = mesh(geo, mat(s.color || COLORS.stair, { roughness: 0.6 }), { kind: 'stair', id: s.id });
     m.userData.edges = true;
     group.add(m);
+    // перила со свободных сторон маршей и площадок
+    const rails = stairRails(s, lay, wallPolys(project, levelId), null);
+    if (rails.sides.length) {
+      group.add(railingMesh(rails.sides.map((l) => l.map((p) => ({ ...p, h: base + p.h }))), RAIL_HEIGHT, { kind: 'stair', id: s.id }));
+    }
   }
   return group;
+}
+
+/** Ограждение проёмов в перекрытии этого этажа над лестницами с этажа ниже. */
+export function buildStairGuards(project, levelId, base) {
+  const group = new THREE.Group();
+  const below = levelBelow(project, levelId);
+  if (!below) return group;
+  const upper = wallPolys(project, levelId);
+  for (const s of project.stairs.filter((x) => x.levelId === below.id)) {
+    const lay = stairLayout(s, stairRise3D(project, s));
+    const { guards } = stairRails(s, lay, [], upper);
+    if (guards.length) group.add(railingMesh(guards.map((l) => l.map((p) => ({ ...p, h: base + FLOOR_LIFT }))), GUARD_HEIGHT, { kind: 'stair', id: s.id }));
+  }
+  return group;
+}
+
+/** Многоугольники стен этажа (для поиска свободных сторон лестницы). */
+export function wallPolys(project, levelId) {
+  return [...computeWallGeometry(project.walls.filter((w) => w.levelId === levelId)).values()].map((g) => g.poly);
 }
 
 const STRINGER_T = 0.05; // толщина косоура

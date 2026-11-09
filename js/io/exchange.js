@@ -12,6 +12,7 @@ import { createEmptyProject, createLevel, normalizeProject, SITE_LEVEL, getLevel
 import { createWall, createOpening, createRoom, createStair, createItem, createRoof, createZone } from '../model/factories.js';
 import { CATALOG, catalogItem } from '../model/catalog.js';
 import { DESCENTS } from '../geometry/cellarEntry.js';
+import { RAILINGS } from '../geometry/stairRails.js';
 import { DEFAULTS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
@@ -59,7 +60,7 @@ export function toExchange(project) {
       rooms: project.rooms.filter((r) => r.levelId === level.id).map((r) => ({ name: r.name, floor: r.floor, points: r.points.map(pt) })),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
-        .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}) })),
+        .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) })),
       furniture: project.items.filter((it) => it.levelId === level.id).map(itemOut),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
@@ -371,6 +372,7 @@ function importLevel(project, lvl, l, k, warnings) {
     if (s.flight) st.flight = clamp(num(s.flight, 1) * k, 0.5, 2);
     st.flip = !!s.flip;
     if (STAIR_STYLES[s.style]) st.style = s.style;
+    if (RAILINGS[s.railing]) st.railing = s.railing;
     project.stairs.push(st);
   }
   for (const it of l.furniture || l.items || []) addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings);
