@@ -912,9 +912,30 @@ function checkCellarEntries(project, ground, push) {
   const base = ground ? levelElevation(project, ground.id) : 0;
   const porch = ground ? porchSteps(project, ground.id, gGeoms, base).map((st) => ccw(st.poly)) : [];
   const items = project.items.filter((it) => it.levelId === SITE_LEVEL && !SOFT.has(it.type));
+  const geomsByLevel = new Map();
   for (const e of entries) {
     const pit = ccw(e.pit);
     const zone = ccw(hull([...e.pit, ...e.walls.flatMap((w) => w.poly)]));
+    // приямок не должен выходить за угол дома: стенка приямка повисает в воздухе
+    if (!geomsByLevel.has(e.levelId)) geomsByLevel.set(e.levelId, computeWallGeometry(project.walls.filter((w) => w.levelId === e.levelId)));
+    const op = project.openings.find((o) => o.id === e.openingId);
+    const g = op && geomsByLevel.get(e.levelId).get(op.wallId);
+    if (g) {
+      const ss = [...e.pit, ...e.walls.flatMap((w) => w.poly)].map((p) => (p.x - g.a.x) * g.d.x + (p.y - g.a.y) * g.d.y);
+      const over = Math.max(-g.half - Math.min(...ss), Math.max(...ss) - (g.len + g.half));
+      if (over > 0.03) {
+        push({
+          id: `pc:${e.openingId}`,
+          level: 'warn',
+          title: 'Приямок подвала выходит за угол дома',
+          text: `Спуск длиннее стены на ${Math.round(over * 100)} см. Сдвиньте дверь подвала от угла или поверните спуск в другую сторону (свойство «Спуск»).`,
+          levelId: SITE_LEVEL,
+          refs: [{ kind: 'opening', id: e.openingId }],
+          at: centroidOf(pit),
+          area: pit,
+        });
+      }
+    }
     for (const fp of fps) {
       const cut = clipByConvex(fp, pit);
       if (cut.length >= 3 && polygonArea(cut) > 0.05) {

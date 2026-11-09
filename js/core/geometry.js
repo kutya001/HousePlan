@@ -159,6 +159,47 @@ export function clipPolygonHalfPlane(poly, origin, normal) {
   return out;
 }
 
+/**
+ * Многоугольник минус выпуклое «окно» (может пересекать край): непересекающиеся
+ * куски — по одному на каждую сторону окна. Окно целиком внутри — не трогаем
+ * (его делают отверстием), вне — многоугольник целиком.
+ */
+export function subtractConvex(poly, hole) {
+  const h = polygonSignedArea(hole) < 0 ? [...hole].reverse() : hole; // против часовой
+  let inside = poly;
+  for (let i = 0; i < h.length && inside.length >= 3; i++) {
+    const a = h[i];
+    const b = h[(i + 1) % h.length];
+    inside = clipPolygonHalfPlane(inside, a, { x: -(b.y - a.y), y: b.x - a.x });
+  }
+  if (inside.length < 3 || Math.abs(polygonSignedArea(inside)) < 1e-4) return [poly];
+  const out = [];
+  let rest = poly;
+  for (let i = 0; i < h.length && rest.length >= 3; i++) {
+    const a = h[i];
+    const b = h[(i + 1) % h.length];
+    const n = { x: -(b.y - a.y), y: b.x - a.x };
+    const piece = clipPolygonHalfPlane(rest, a, { x: -n.x, y: -n.y });
+    if (piece.length >= 3 && Math.abs(polygonSignedArea(piece)) > 1e-4) out.push(piece);
+    rest = clipPolygonHalfPlane(rest, a, n);
+  }
+  return out;
+}
+
+export function isConvex(poly) {
+  let sign = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const c = poly[(i + 2) % poly.length];
+    const cr = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(cr) < 1e-9) continue;
+    if (sign && Math.sign(cr) !== sign) return false;
+    sign = Math.sign(cr);
+  }
+  return true;
+}
+
 /** Углы повёрнутого прямоугольника: центр, ширина (локальная X), глубина (локальная Y), угол в градусах. */
 export function rectCorners(cx, cy, w, d, rotDeg = 0) {
   const r = rotDeg * DEG;

@@ -170,6 +170,22 @@ export class View3D {
     this._hadWalls = hasWalls;
   }
 
+  /**
+   * Точность буфера глубины зависит от отношения far/near: издалека стыки стен и
+   * полов начинают «рябить». Ближнюю плоскость отодвигаем вместе с камерой.
+   */
+  _fitDepth() {
+    const cam = this.camera;
+    const d = cam.position.distanceTo(this.controls.target);
+    const near = Math.min(2, Math.max(0.1, d * 0.02));
+    const far = Math.max(400, d * 25);
+    if (Math.abs(near - cam.near) / cam.near > 0.15 || Math.abs(far - cam.far) / cam.far > 0.15) {
+      cam.near = near;
+      cam.far = far;
+      cam.updateProjectionMatrix();
+    }
+  }
+
   _fitShadow() {
     const box = new THREE.Box3().setFromObject(this.root);
     if (box.isEmpty()) return;
@@ -297,8 +313,18 @@ export class View3D {
     const dt = Math.min(0.1, (now - this._last) / 1000);
     this._last = now;
     this.doors.update(dt);
-    if (this.walking) this.character.update(dt);
-    else this.controls.update();
+    if (this.walking) {
+      // в прогулке камера у самых стен — ближняя плоскость маленькая
+      if (this.camera.near !== 0.08) {
+        this.camera.near = 0.08;
+        this.camera.far = 600;
+        this.camera.updateProjectionMatrix();
+      }
+      this.character.update(dt);
+    } else {
+      this.controls.update();
+      this._fitDepth();
+    }
     this.lamps.tick();
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);

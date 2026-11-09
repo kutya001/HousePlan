@@ -4,7 +4,7 @@ import { extrudePolygon, mergeGeometries, mesh, box, planarUV } from '../meshUti
 import { mat, TEX } from '../materials.js';
 import { ZONE_TEXTURE } from '../textures.js';
 import { COLORS, ZONE_MATERIALS } from '../../model/defaults.js';
-import { bboxOf, dist, pointInPolygon } from '../../core/geometry.js';
+import { bboxOf, dist, pointInPolygon, subtractConvex, isConvex } from '../../core/geometry.js';
 import { excavationOutlines } from '../../geometry/excavation.js';
 import { cellarEntries, RAIL_H, PIT_CURB } from '../../geometry/cellarEntry.js';
 
@@ -37,7 +37,13 @@ export function buildSite(project) {
   for (const z of project.zones) {
     const m = ZONE_MATERIALS[z.material] || ZONE_MATERIALS.lawn;
     const top = z.material === 'water' ? 0.015 : z.material === 'deck' ? 0.12 : 0.03;
-    let geo = extrudePolygon(z.points, 0, top, pits.filter((h) => inside(h, z.points)));
+    // приямок, задевающий край дорожки, вырезаем из неё: дорожка не висит над ступенями
+    let pieces = [z.points];
+    for (const h of pits) {
+      if (inside(h, z.points) || !isConvex(h)) continue;
+      pieces = pieces.flatMap((p) => subtractConvex(p, h));
+    }
+    let geo = mergeGeometries(pieces.map((p) => extrudePolygon(p, 0, top, pits.filter((h) => inside(h, p)))));
     if (!geo) continue;
     if (TEX.on && ZONE_TEXTURE[z.material]) geo = planarUV(geo);
     const material = z.material === 'water' ? mat(m.color, { roughness: 0.1, metalness: 0.1 }) : mat(m.color, { roughness: 0.95, map: ZONE_TEXTURE[z.material] });
