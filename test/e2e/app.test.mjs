@@ -79,8 +79,11 @@ test('вечером светильники зажигаются', async () => {
     houseplan.state.setSetting('sunReal', true);
     houseplan.state.setSetting('sunHour', 22.5);
   });
-  await page.waitForTimeout(1500);
-  const lit = await page.evaluate(() => houseplan.view3d.lamps.lights.some((l) => l.intensity > 1));
+  // 3D пересобирается с задержкой; на занятой машине — дольше
+  const lit = await page
+    .waitForFunction(() => houseplan.view3d.lamps.lights.some((l) => l.intensity > 1), null, { timeout: 30000 })
+    .then(() => true)
+    .catch(() => false);
   assert.ok(lit);
   await page.evaluate(() => houseplan.state.setSetting('sunReal', false));
 });
