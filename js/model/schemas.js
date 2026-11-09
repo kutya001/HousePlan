@@ -22,6 +22,8 @@ import { catalogItem } from './catalog.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
 import { RAILINGS } from '../geometry/stairRails.js';
+import { roomWindowDirections } from '../geometry/orientation.js';
+import { siteGeo } from '../geometry/sun.js';
 import { wallLength } from './operations.js';
 
 const num = (key, label, opts = {}) => ({
@@ -135,6 +137,7 @@ export const SCHEMAS = {
     select('floor', 'Пол', Object.fromEntries(Object.entries(FLOOR_MATERIALS).map(([k, m]) => [k, m.name]))),
     readonly('Площадь (чистая)', (r, p) => fmtArea(roomNetArea(r, p.walls.filter((w) => w.levelId === r.levelId)))),
     readonly('Площадь по осям', (r) => fmtArea(polygonArea(r.points))),
+    readonly('Окна выходят на', (r, p) => roomWindowDirections(p, r).join(', ') || 'окон нет'),
   ],
   stair: [
     select('shape', 'Форма', STAIR_SHAPES, {
@@ -210,6 +213,19 @@ export const SCHEMAS = {
       visible: (s) => s.fence.enabled,
     },
     { type: 'color', label: 'Цвет забора', get: (s) => s.fence.color, set: (s, v) => (s.fence.color = v), visible: (s) => s.fence.enabled },
+    {
+      ...num('north', 'Север на плане', { min: -180, max: 180, step: 5, unit: '°', hint: '0 — север вверху плана, 90 — справа. Стрелка севера — в углу плана' }),
+      get: (s) => siteGeo(s).north,
+      set: (s, v) => (s.north = v),
+    },
+    { ...num('lat', 'Широта', { min: -66, max: 66, step: 0.01, unit: '°', hint: 'Для солнца по дате и времени. По умолчанию — Бишкек' }), get: (s) => siteGeo(s).lat, set: (s, v) => (s.lat = v) },
+    { ...num('lon', 'Долгота', { min: -180, max: 180, step: 0.01, unit: '°' }), get: (s) => siteGeo(s).lon, set: (s, v) => (s.lon = v) },
+    { ...num('tz', 'Часовой пояс (UTC+)', { min: -12, max: 14, step: 1, unit: 'ч' }), get: (s) => siteGeo(s).tz, set: (s, v) => (s.tz = v) },
+    {
+      ...num('setback', 'Отступ дома от границ', { min: 0, max: 20, step: 0.5, hint: 'Проверка предупредит, если дом стоит ближе к забору' }),
+      get: (s) => (Number.isFinite(s.setback) ? s.setback : 3),
+      set: (s, v) => (s.setback = v),
+    },
   ],
 };
 

@@ -20,6 +20,10 @@ const DEFAULT_SETTINGS = {
   furniture3d: true,
   theme: 'system', // light | dark | system
   walkSpawn: 'entrance', // где появляется манекен: entrance | inside | point
+  sunReal: false, // солнце по дате и времени (иначе — удобный постоянный свет)
+  sunMonth: 6,
+  sunDay: 21,
+  sunHour: 14,
   checks: true, // подсвечивать на плане пересечения и другие ошибки
 };
 

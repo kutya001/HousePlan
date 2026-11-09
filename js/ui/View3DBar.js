@@ -2,6 +2,7 @@
 import { h, icon } from './dom.js';
 import { openMenu } from './ContextMenu.js';
 import { SPAWN_MODES } from '../model/defaults.js';
+import { SunPanel } from './SunPanel.js';
 
 const TOGGLES = [
   ['cutaway', 'cut', 'Разрез', 'Скрыть этажи выше активного и его крышу'],
@@ -36,11 +37,19 @@ export class View3DBar {
         h('div', { class: 'v3-split' }, this.walkBtn, this.spawnBtn),
       ),
       h('div', { class: 'v3-group' }, this.toggles),
-      h('div', { class: 'v3-group' }, btn('image', 'Снимок', () => app.file.export3DPNG(), 'Сохранить картинку 3D-вида')),
+      h(
+        'div',
+        { class: 'v3-group' },
+        (this.sunBtn = btn('clock', 'Солнце', () => this.sun.toggle(), 'Солнце по дате и времени, тени, север')),
+        btn('image', 'Снимок', () => app.file.export3DPNG(), 'Сохранить картинку 3D-вида'),
+      ),
     );
+    this.sunBtn.dataset.sunToggle = '1';
+    this.sun = new SunPanel(app, root.parentElement);
     this.walkHint = h('div', { class: 'walk-hint', hidden: true });
     root.parentElement.append(this.walkHint);
     app.bus.on('settings:changed', () => this.sync());
+    app.bus.on('sun:changed', () => this.sunBtn.classList.toggle('active', !!app.state.settings.sunReal));
     app.bus.on('walk:changed', ({ walking }) => {
       this.walkHint.textContent = app.state.coarse
         ? 'Джойстик — идти (до края — бегом), палец по экрану — оглядеться, касание — выбрать объект'

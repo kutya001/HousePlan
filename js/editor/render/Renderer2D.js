@@ -18,6 +18,7 @@ import { drawDimensions } from './drawDimensions.js';
 import { drawSelection } from './drawSelection.js';
 import { drawIssues } from './drawIssues.js';
 import { drawOutdoorSteps } from './drawOutdoorSteps.js';
+import { drawCompass } from './drawCompass.js';
 import { isGroundLevel, levelBelow } from '../../model/project.js';
 
 export class Renderer2D {
@@ -85,6 +86,7 @@ export class Renderer2D {
     drawIssues(ctx, this);
     if (!exportMode) drawSpawn(ctx, this);
     if (!exportMode) drawCharacter(ctx, this, this.editor.character);
+    if (this.settings.compass !== false) drawCompass(ctx, this);
     if (overlay) {
       drawSelection(ctx, this);
       this.editor.tool?.drawOverlay?.(ctx, this);

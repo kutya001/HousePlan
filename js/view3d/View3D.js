@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CharacterMode } from './character/CharacterMode.js';
 import { DoorAnimator } from './doors.js';
 import { buildScene, disposeTree, applyCutaway, isShown } from './SceneBuilder.js';
+import { siteGeo, solarPosition, azimuthVector } from '../geometry/sun.js';
 import { highlighted } from './materials.js';
 import { levelElevation, getEntity, SITE_LEVEL, groundLevel } from '../model/project.js';
 
@@ -37,6 +38,9 @@ export class View3D {
 
     const hemi = new THREE.HemisphereLight('#f4f8fc', '#8c927f', 1.3);
     scene.add(hemi);
+    this.hemi = hemi;
+    this._sunDir = new THREE.Vector3(30, 50, 22).normalize();
+    this.night = 0; // 0 — день, 1 — ночь (для светильников)
     const sun = new THREE.DirectionalLight('#fff6e8', 2.2);
     sun.position.set(30, 45, 20);
     sun.castShadow = true;
@@ -70,6 +74,7 @@ export class View3D {
     // разрез по этажу — видимость готовых групп, без пересборки
     bus.on('level:changed', () => this.applyCutaway());
     bus.on('settings:changed', ({ key }) => {
+      if (key.startsWith('sun')) this.applySun();
       if (key === 'cutaway') this.applyCutaway();
       if (['roofs3d', 'edges', 'furniture3d'].includes(key)) this.invalidate();
       if (key === 'shadows') {
@@ -82,6 +87,7 @@ export class View3D {
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(container);
     this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
+    this.applySun();
     this._loop = this._loop.bind(this);
   }
 
@@ -145,7 +151,7 @@ export class View3D {
         o.userData.baseMaterial = o.material;
       }
     });
-    this._fitShadow();
+    this.applySun(); // и тени подгоняет под дом
     this._applyHighlight();
     this.doors.attach(this.root);
     this.character.onProjectChanged();
@@ -160,17 +166,66 @@ export class View3D {
     if (box.isEmpty()) return;
     const c = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const r = Math.min(80, Math.max(size.x, size.z) * 0.6 + 5);
+    const r = Math.min(80, Math.max(size.x, size.z, size.y) * 0.7 + 5);
     const cam = this.sun.shadow.camera;
     cam.left = -r;
     cam.right = r;
     cam.top = r;
     cam.bottom = -r;
     cam.near = 1;
-    cam.far = 200;
+    cam.far = 260;
     cam.updateProjectionMatrix();
-    this.sun.position.set(c.x + 30, 50, c.z + 22);
+    // низкое солнце даёт длинные тени — свет ставим по направлению на солнце
+    const d = this._sunDir.clone();
+    if (d.y < 0.08) d.y = 0.08;
+    d.normalize().multiplyScalar(80);
+    this.sun.position.set(c.x + d.x, c.y + d.y, c.z + d.z);
     this.sun.target.position.set(c.x, 0, c.z);
+  }
+
+  /**
+   * Солнце по дате и времени (Настройки → «Солнце»): направление света и теней,
+   * сумерки и ночь. Без этого — постоянный удобный свет «днём».
+   */
+  applySun() {
+    const st = this.app.state.settings;
+    const sky = new THREE.Color('#dde7ee');
+    let sunI = 2.2;
+    let hemiI = 1.3;
+    const sunC = new THREE.Color('#fff6e8');
+    const ground = new THREE.Color('#8c927f');
+    this.night = 0;
+    if (st.sunReal) {
+      const geo = siteGeo(this.app.project.site);
+      const p = solarPosition(geo, st.sunMonth || 6, st.sunDay || 21, st.sunHour ?? 14);
+      const hv = azimuthVector(p.azimuth, geo.north);
+      const el = p.elevation * (Math.PI / 180);
+      this._sunDir.set(hv.x * Math.cos(el), Math.sin(el), hv.y * Math.cos(el)).normalize();
+      this.sunInfo = p;
+      // день (выше 12°) → сумерки → ночь (ниже −5°)
+      const day = Math.max(0, Math.min(1, (p.elevation + 5) / 17));
+      this.night = 1 - day;
+      sunI = 2.4 * Math.max(0, Math.min(1, p.elevation / 12));
+      hemiI = 0.22 + 1.08 * day;
+      sunC.lerpColors(new THREE.Color('#ff9a5c'), new THREE.Color('#fff6e8'), Math.max(0, Math.min(1, p.elevation / 20)));
+      sky.lerpColors(new THREE.Color('#121a27'), new THREE.Color('#dde7ee'), day);
+      if (p.elevation > -5 && p.elevation < 8) sky.lerp(new THREE.Color('#e9b08a'), 0.35 * (1 - Math.abs(p.elevation - 1.5) / 6.5));
+      ground.lerpColors(new THREE.Color('#2a2e36'), new THREE.Color('#8c927f'), day);
+    } else {
+      this._sunDir.set(30, 50, 22).normalize();
+      this.sunInfo = null;
+    }
+    this.sun.intensity = sunI;
+    this.sun.color.copy(sunC);
+    this.sun.castShadow = sunI > 0.05 && !!st.shadows;
+    this.hemi.intensity = hemiI;
+    this.hemi.groundColor.copy(ground);
+    this.hemi.color.lerpColors(new THREE.Color('#8fa6d6'), new THREE.Color('#f4f8fc'), 1 - this.night);
+    this.scene.background = sky;
+    this.scene.fog.color.copy(sky);
+    if (this.root) this._fitShadow();
+    this.lamps?.update(this.night);
+    this.app.bus.emit('sun:changed', { info: this.sunInfo, night: this.night });
   }
 
   _applyHighlight() {
