@@ -2,7 +2,8 @@
  * Всплывающее меню: контекстное (ПКМ / долгое нажатие), меню шапки, выбор этажа.
  * На телефоне показывается шторкой снизу — крупные пункты под большой палец.
  *
- * items: [{ label, icon, kbd, onClick, danger, disabled } | { separator: true }]
+ * items: [{ label, icon, kbd, onClick, danger, disabled, active, toggle } | { separator: true }]
+ * toggle — пункт-переключатель: меню остаётся открытым, галочка меняется на месте
  */
 import { h, icon } from './dom.js';
 
@@ -34,10 +35,18 @@ export function openMenu(app, opts) {
     const b = h(
       'button',
       {
-        class: `ctx-item ${it.danger ? 'danger' : ''} ${it.active ? 'active' : ''}`,
-        role: 'menuitem',
+        class: `ctx-item ${it.danger ? 'danger' : ''} ${it.active ? 'active' : ''} ${it.toggle ? 'ctx-toggle' : ''}`,
+        role: it.toggle ? 'menuitemcheckbox' : 'menuitem',
+        'aria-checked': it.toggle ? String(!!it.active) : null,
         disabled: it.disabled,
         onclick: () => {
+          if (it.toggle) {
+            const on = !b.classList.contains('active');
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-checked', String(on));
+            it.onClick?.(on);
+            return;
+          }
           close();
           it.onClick?.();
         },
@@ -45,7 +54,7 @@ export function openMenu(app, opts) {
       it.icon ? icon(it.icon, 18) : h('span', { class: 'icon', style: { width: '18px' } }),
       h('span', {}, it.label),
       it.kbd ? h('kbd', {}, it.kbd) : null,
-      it.active ? icon('check', 16) : null,
+      it.active || it.toggle ? h('span', { class: 'ctx-check' }, icon('check', 16)) : null,
     );
     buttons.push(b);
     menu.append(b);

@@ -1,4 +1,5 @@
 /** Выделение, подсветка под курсором и ручки редактирования. */
+import { planRect } from '../../model/layers.js';
 import { THEME } from './theme.js';
 import { getEntity } from '../../model/project.js';
 import { rectCorners, mul, add } from '../../core/geometry.js';
@@ -34,7 +35,10 @@ function outlineRef(ctx, r, ref, { color, width, fill, selected }) {
       dimLine(ctx, r, add(f.A1, nn), add(g.b, nn), g.n, 18, true);
       dimLine(ctx, r, add(f.A0, mul(nn, -1)), add(f.A1, mul(nn, -1)), mul(g.n, -1), 18, true);
     }
-  } else if (ref.kind === 'item') poly = rectCorners(e.x, e.y, e.w, e.d, e.rotation);
+  } else if (ref.kind === 'item') {
+    const pr = planRect(e, r.px(1));
+    poly = rectCorners(pr.x, pr.y, pr.w, pr.d, pr.rotation);
+  }
   else if (ref.kind === 'stair') poly = entityOutline(r.editor, ref);
   else if (ref.kind === 'roof') poly = roofGeometry(e, 0).plan.outline;
   else if (ref.kind === 'room' || ref.kind === 'zone') poly = e.points;

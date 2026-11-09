@@ -13,6 +13,7 @@ export const CATEGORIES = [
   { id: 'bath', name: 'Санузел' },
   { id: 'other', name: 'Разное' },
   { id: 'structure', name: 'Конструкции' },
+  { id: 'mep', name: 'Инженерия' },
   { id: 'outdoor', name: 'Участок' },
 ];
 
@@ -66,6 +67,23 @@ export const CATALOG = [
   { type: 'balcony', name: 'Балкон', category: 'structure', w: 3.0, d: 1.2, h: 1.0, color: '#c9c3b8', wallSnap: true, attached: true },
   { type: 'canopy', name: 'Козырёк над входом', category: 'structure', w: 2.2, d: 1.3, h: 0.16, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4 },
   { type: 'carport', name: 'Навес для машины', category: 'structure', w: 3.6, d: 6.0, h: 2.7, color: '#6d7276', outdoor: true },
+
+  // Инженерия: layer — слой плана (электрика, сантехника, отопление);
+  // marker — маленький значок не меньше markerPx пикселей на плане; ceiling — висит под потолком
+  { type: 'socket', name: 'Розетка', category: 'mep', layer: 'electric', w: 0.08, d: 0.04, h: 0.08, color: '#f3f3f1', wallSnap: true, marker: true, elevation: 0.3 },
+  { type: 'socket_double', name: 'Розетка двойная', category: 'mep', layer: 'electric', w: 0.16, d: 0.04, h: 0.08, color: '#f3f3f1', wallSnap: true, marker: true, elevation: 0.3 },
+  { type: 'socket_kitchen', name: 'Розетка над столешницей', category: 'mep', layer: 'electric', w: 0.16, d: 0.04, h: 0.08, color: '#f3f3f1', wallSnap: true, marker: true, elevation: 1.1 },
+  { type: 'switch', name: 'Выключатель', category: 'mep', layer: 'electric', w: 0.08, d: 0.04, h: 0.08, color: '#f3f3f1', wallSnap: true, marker: true, markerPx: [14, 14], elevation: 0.9 },
+  { type: 'ceiling_light', name: 'Светильник потолочный', category: 'mep', layer: 'electric', w: 0.45, d: 0.45, h: 0.12, color: '#f6f1e2', marker: true, ceiling: true, lamp: true },
+  { type: 'spot_light', name: 'Точечный светильник', category: 'mep', layer: 'electric', w: 0.1, d: 0.1, h: 0.04, color: '#f6f1e2', marker: true, ceiling: true, lamp: true },
+  { type: 'wall_lamp', name: 'Бра', category: 'mep', layer: 'electric', w: 0.25, d: 0.15, h: 0.22, color: '#f6f1e2', wallSnap: true, marker: true, markerPx: [16, 11], elevation: 1.8, lamp: true },
+  { type: 'el_panel', name: 'Электрощит', category: 'mep', layer: 'electric', w: 0.4, d: 0.14, h: 0.5, color: '#c9ccd0', wallSnap: true, elevation: 1.4 },
+  { type: 'water_point', name: 'Вывод воды', category: 'mep', layer: 'plumbing', w: 0.1, d: 0.08, h: 0.1, color: '#2f7fd1', wallSnap: true, marker: true, markerPx: [15, 15], elevation: 0.5 },
+  { type: 'sewer_point', name: 'Вывод канализации', category: 'mep', layer: 'plumbing', w: 0.12, d: 0.12, h: 0.12, color: '#7a5b44', wallSnap: true, marker: true, markerPx: [15, 15], elevation: 0 },
+  { type: 'floor_drain', name: 'Трап в полу', category: 'mep', layer: 'plumbing', w: 0.15, d: 0.15, h: 0.01, color: '#9aa1a8', marker: true },
+  { type: 'water_heater', name: 'Водонагреватель', category: 'mep', layer: 'plumbing', w: 0.45, d: 0.45, h: 0.85, color: '#eef0f2', wallSnap: true, elevation: 1.1 },
+  { type: 'radiator', name: 'Радиатор', category: 'mep', layer: 'heating', w: 1.0, d: 0.1, h: 0.55, color: '#f3f3f1', wallSnap: true, elevation: 0.12 },
+  { type: 'towel_rail', name: 'Полотенцесушитель', category: 'mep', layer: 'heating', w: 0.5, d: 0.1, h: 0.8, color: '#c8ccd1', wallSnap: true, elevation: 0.9 },
 
   // Участок
   { type: 'tree', name: 'Дерево лиственное', category: 'outdoor', w: 4.5, d: 4.5, h: 6.5, color: '#6f9d4f', outdoor: true },

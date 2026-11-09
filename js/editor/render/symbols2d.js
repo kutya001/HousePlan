@@ -4,6 +4,7 @@
  * центр в (0,0), ширина по X, глубина по Y, «спинка» — сторона −Y.
  */
 import { THEME, tint, shade, itemFill } from './theme.js';
+import { MEP_SYMBOLS, drawMepSymbol } from './symbolsMep.js';
 
 const TAU = Math.PI * 2;
 
@@ -649,7 +650,8 @@ function withA(hex, a) {
  * Рисует объект в мировых координатах.
  * @param r — рендерер (для толщины линий в пикселях); может быть null (иконки каталога)
  */
-export function drawItemSymbol(ctx, item, lineWidth, { alpha = 1 } = {}) {
+export function drawItemSymbol(ctx, item, lineWidth, { alpha = 1, px = null } = {}) {
+  if (MEP_SYMBOLS[item.type]) return drawMepSymbol(ctx, item, lineWidth, px, alpha);
   ctx.save();
   ctx.translate(item.x, item.y);
   ctx.rotate(((item.rotation || 0) * Math.PI) / 180);
@@ -663,5 +665,5 @@ export function drawItemSymbol(ctx, item, lineWidth, { alpha = 1 } = {}) {
 }
 
 export function hasSymbol(type) {
-  return !!SYMBOLS[type];
+  return !!SYMBOLS[type] || !!MEP_SYMBOLS[type];
 }

@@ -4,6 +4,7 @@ import { FLOOR_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, polygonLabelPoint } from '../../core/geometry.js';
 import { fmtArea } from '../../core/format.js';
 import { roomNetArea } from '../../geometry/roomDetect.js';
+import { layerVisible, LAYER_COLORS } from '../../model/layers.js';
 
 export function drawRooms(ctx, r) {
   const rooms = r.project.rooms.filter((x) => x.levelId === r.levelId);
@@ -40,7 +41,31 @@ export function drawRooms(ctx, r) {
       ctx.stroke();
       ctx.restore();
     }
+    if (room.heatedFloor && layerVisible(r.settings, 'heating')) drawHeatedFloor(ctx, r, room);
   }
+}
+
+/** Тёплый пол — волнистая штриховка цвета слоя «Отопление». */
+function drawHeatedFloor(ctx, r, room) {
+  const bb = bboxOf(room.points);
+  const step = 0.25;
+  const amp = 0.06;
+  ctx.save();
+  r.path(ctx, room.points);
+  ctx.clip();
+  ctx.strokeStyle = LAYER_COLORS.heating;
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = r.px(1);
+  ctx.beginPath();
+  for (let y = Math.floor(bb.minY / step) * step + step / 2; y <= bb.maxY; y += step) {
+    for (let x = bb.minX; x <= bb.maxX + 0.2; x += 0.1) {
+      const yy = y + amp * Math.sin((x / 0.4) * Math.PI * 2);
+      if (x === bb.minX) ctx.moveTo(x, yy);
+      else ctx.lineTo(x, yy);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function drawRoomLabels(ctx, r) {

@@ -1,6 +1,7 @@
 /**
  * Палитра команд (Ctrl+K): быстрый поиск инструментов, действий, мебели и пресетов.
  */
+import { LAYERS } from '../model/layers.js';
 import { h, icon, clear } from './dom.js';
 import { openModal } from './feedback.js';
 import { TOOL_META } from './Toolbar.js';
@@ -40,6 +41,10 @@ export class CommandPalette {
     cmd('Прогулка: появляться в доме, на активном этаже', 'room', () => app.state.setSetting('walkSpawn', 'inside'), '3D');
     cmd('Проверить проект: пересечения, предметы в стенах, двери', 'shield', () => app.checks.open(), 'Проверка');
     cmd('Исправить ошибки автоматически', 'wand', () => app.checks.fixAll(), 'Проверка');
+    for (const [k, l, ic] of LAYERS) {
+      const on = app.state.settings[`layer_${k}`] !== false;
+      cmd(`${on ? 'Скрыть' : 'Показать'} слой: ${l}`, ic, () => app.state.setSetting(`layer_${k}`, !on), 'Слои');
+    }
     cmd('Тёмная тема', 'moon', () => app.state.setSetting('theme', 'dark'), 'Оформление');
     cmd('Светлая тема', 'sun', () => app.state.setSetting('theme', 'light'), 'Оформление');
     cmd('Настройки', 'settings', () => app.ui.settings.open(), 'Приложение');

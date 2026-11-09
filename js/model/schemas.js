@@ -19,6 +19,7 @@ import {
   ROOM_NAMES,
 } from './defaults.js';
 import { catalogItem } from './catalog.js';
+import { LAYERS, itemLayer } from './layers.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
 import { RAILINGS } from '../geometry/stairRails.js';
@@ -135,6 +136,7 @@ export const SCHEMAS = {
   room: [
     { type: 'text', label: 'Название', list: ROOM_NAMES, get: (r) => r.name, set: (r, v) => (r.name = v) },
     select('floor', 'Пол', Object.fromEntries(Object.entries(FLOOR_MATERIALS).map(([k, m]) => [k, m.name]))),
+    check('heatedFloor', 'Тёплый пол'),
     readonly('Площадь (чистая)', (r, p) => fmtArea(roomNetArea(r, p.walls.filter((w) => w.levelId === r.levelId)))),
     readonly('Площадь по осям', (r) => fmtArea(polygonArea(r.points))),
     readonly('Окна выходят на', (r, p) => roomWindowDirections(p, r).join(', ') || 'окон нет'),
@@ -180,7 +182,9 @@ export const SCHEMAS = {
     rotation,
     posX,
     posY,
-    num('elevation', 'Над полом', { min: 0, max: 5 }),
+    num('elevation', 'Над полом', { min: 0, max: 5, visible: (i) => !catalogItem(i.type)?.ceiling }),
+    { ...readonly('Высота', () => 'под потолком'), visible: (i) => !!catalogItem(i.type)?.ceiling },
+    { ...readonly('Слой', (i) => LAYERS.find(([k]) => k === itemLayer(i))?.[1]), visible: (i) => catalogItem(i.type)?.category === 'mep' },
     color('color', 'Цвет'),
   ],
   roof: [

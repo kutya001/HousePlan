@@ -6,6 +6,7 @@
  */
 import { h, icon } from './dom.js';
 import { openMenu } from './ContextMenu.js';
+import { openLayersMenu } from './layersMenu.js';
 import { levelElevation } from '../model/project.js';
 import { fmtElev } from '../core/format.js';
 
@@ -114,6 +115,7 @@ export class TopBar {
         ...this._fileItems(),
         { separator: true },
         app.pwa?.canInstall ? { label: 'Установить на телефон', icon: 'download', onClick: () => app.pwa.install() } : null,
+        { label: 'Слои: электрика, сантехника…', icon: 'layers', onClick: () => setTimeout(() => openLayersMenu(app), 0) },
         { label: 'Настройки', icon: 'settings', onClick: () => app.ui.settings.open() },
         { label: 'Как пользоваться', icon: 'help', onClick: () => app.ui.help.open() },
       ],

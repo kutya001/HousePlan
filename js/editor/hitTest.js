@@ -5,6 +5,7 @@ import { openingFrame } from './render/drawOpenings.js';
 import { stairLayout } from '../geometry/stairGeometry.js';
 import { stairRise } from './render/drawStairs.js';
 import { roofGeometry } from '../geometry/roofGeometry.js';
+import { itemVisible, isMarker, planRect } from '../model/layers.js';
 
 const ROUND_ITEMS = new Set(['tree', 'conifer', 'fruit_tree', 'bush', 'plant', 'round_table', 'well']);
 
@@ -26,8 +27,15 @@ export function hitTest(editor, p, { tolPx = 6, kinds = null } = {}) {
   }
 
   if (want('item')) {
-    const items = project.items.filter((i) => i.levelId === levelId).sort((a, b) => b.elevation + b.h - (a.elevation + a.h));
-    for (const it of items) if (pointInRotRect(p, it.x, it.y, it.w, it.d, it.rotation, tol * 0.5)) return { kind: 'item', id: it.id };
+    // значки инженерии — первыми: они мелкие и часто лежат поверх мебели
+    const px = editor.viewport.px(1);
+    const items = project.items
+      .filter((i) => i.levelId === levelId && itemVisible(state.settings, i))
+      .sort((a, b) => Number(isMarker(b)) - Number(isMarker(a)) || b.elevation + b.h - (a.elevation + a.h));
+    for (const it of items) {
+      const r = planRect(it, px);
+      if (pointInRotRect(p, r.x, r.y, r.w, r.d, r.rotation, tol * 0.5)) return { kind: 'item', id: it.id };
+    }
   }
 
   if (want('stair')) {
@@ -58,7 +66,7 @@ export function hitTest(editor, p, { tolPx = 6, kinds = null } = {}) {
   }
 
   if (ground && want('item')) {
-    const items = project.items.filter((i) => i.levelId === SITE_LEVEL).sort((a, b) => a.w * a.d - b.w * b.d);
+    const items = project.items.filter((i) => i.levelId === SITE_LEVEL && itemVisible(state.settings, i)).sort((a, b) => a.w * a.d - b.w * b.d);
     for (const it of items) {
       if (ROUND_ITEMS.has(it.type)) {
         if (dist(p, it) < Math.min(it.w, it.d) / 2) return { kind: 'item', id: it.id };
@@ -96,7 +104,7 @@ export function entitiesInRect(editor, rect) {
   for (const w of project.walls)
     if (w.levelId === levelId && inside({ x: w.x1, y: w.y1 }) && inside({ x: w.x2, y: w.y2 })) out.push({ kind: 'wall', id: w.id });
   for (const it of project.items)
-    if ((it.levelId === levelId || (ground && it.levelId === SITE_LEVEL)) && inside(it)) out.push({ kind: 'item', id: it.id });
+    if ((it.levelId === levelId || (ground && it.levelId === SITE_LEVEL)) && itemVisible(state.settings, it) && inside(it)) out.push({ kind: 'item', id: it.id });
   for (const s of project.stairs) if (s.levelId === levelId && inside(s)) out.push({ kind: 'stair', id: s.id });
   for (const r of project.rooms) if (r.levelId === levelId && r.points.every(inside)) out.push({ kind: 'room', id: r.id });
   for (const r of project.roofs) if (r.levelId === levelId && inside(r)) out.push({ kind: 'roof', id: r.id });

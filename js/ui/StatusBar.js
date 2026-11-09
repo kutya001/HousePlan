@@ -1,6 +1,8 @@
 /** Строка состояния: подсказка инструмента, координаты, переключатели, автосохранение. Плюс кнопки масштаба на плане. */
 import { h, icon } from './dom.js';
 import { fmtLenShort } from '../core/format.js';
+import { openLayersMenu } from './layersMenu.js';
+import { LAYERS, layerVisible } from '../model/layers.js';
 
 const TOGGLES = [
   ['snap', 'magnet', 'Привязки', 'Прилипание к стенам, углам, сетке. Alt — временно выключить'],
@@ -29,7 +31,13 @@ export class StatusBar {
         h('span', {}, label),
       ),
     );
-    root.append(this.hint, h('div', { class: 'status-right' }, this.checks, this.coords, ...this.toggles, this.saved));
+    this.layersBtn = h(
+      'button',
+      { class: 'toggle', 'data-tip': 'Слои: мебель, электрика, сантехника, отопление', 'aria-haspopup': 'menu', onclick: (e) => openLayersMenu(app, e.currentTarget) },
+      icon('layers', 16),
+      h('span', {}, 'Слои'),
+    );
+    root.append(this.hint, h('div', { class: 'status-right' }, this.checks, this.coords, ...this.toggles, this.layersBtn, this.saved));
 
     this.zoomLabel = h('button', { class: 'zoom-label', 'data-tip': 'Показать весь дом · Home', onclick: () => app.editor.fitToContent() }, '100%');
     zoomRoot.append(
@@ -65,10 +73,14 @@ export class StatusBar {
       this.checks.replaceChildren(icon('warn', 16), h('span', {}, app.checks.summary));
     });
     this._syncZoom();
+    this._syncToggles();
   }
 
   _syncToggles() {
-    for (const b of this.toggles) b.setAttribute('aria-pressed', String(!!this.app.state.settings[b.dataset.key]));
+    const st = this.app.state.settings;
+    for (const b of this.toggles) b.setAttribute('aria-pressed', String(!!st[b.dataset.key]));
+    // «Слои» подсвечены, если что-то скрыто
+    this.layersBtn.setAttribute('aria-pressed', String(LAYERS.some(([k]) => !layerVisible(st, k))));
   }
 
   _syncZoom() {

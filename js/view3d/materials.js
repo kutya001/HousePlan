@@ -30,6 +30,22 @@ export function mat(color, opts = {}) {
   return cache.get(key);
 }
 
+/**
+ * Плафоны светильников: один общий материал, вечером «зажигается»
+ * (setLampGlow из View3D по положению солнца).
+ */
+export const lampGlowMat = new THREE.MeshStandardMaterial({
+  color: new THREE.Color('#fbf4e4'),
+  roughness: 0.6,
+  emissive: new THREE.Color('#ffcf86'),
+  emissiveIntensity: 0,
+  side: THREE.DoubleSide,
+});
+
+export function setLampGlow(k) {
+  lampGlowMat.emissiveIntensity = 1.6 * k;
+}
+
 export function glassMat() {
   return mat('#a9cde3', { roughness: 0.08, metalness: 0.1, opacity: 0.38 });
 }

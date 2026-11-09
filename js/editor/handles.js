@@ -6,6 +6,7 @@ import { getEntity } from '../model/project.js';
 import { toWorld, mid } from '../core/geometry.js';
 import { stairLayout } from '../geometry/stairGeometry.js';
 import { stairRise } from './render/drawStairs.js';
+import { isMarker, planRect } from '../model/layers.js';
 
 export function computeHandles(editor) {
   const { state, project } = editor.app;
@@ -22,6 +23,13 @@ export function computeHandles(editor) {
   } else if (ref.kind === 'item' || ref.kind === 'roof' || ref.kind === 'stair') {
     let w = e.w ?? e.width;
     let d = e.d ?? e.length;
+    if (ref.kind === 'item' && isMarker(e)) {
+      // мелкий значок: ручка поворота от видимого контура, размер не тянем
+      const pr = planRect(e, px(1));
+      const rot = e.rotation || 0;
+      handles.push({ type: 'rotate', ref, anchor: toWorld({ x: 0, y: -pr.d / 2 }, pr.x, pr.y, rot), pos: toWorld({ x: 0, y: -pr.d / 2 - px(24) }, pr.x, pr.y, rot) });
+      return handles;
+    }
     if (ref.kind === 'stair') {
       w = e.width;
       d = e.shape === 'spiral' ? e.width : e.length;

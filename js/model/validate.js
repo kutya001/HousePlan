@@ -232,7 +232,8 @@ export function checkProject(project) {
   for (const level of project.levels) {
     const lid = level.id;
     const geoms = geomsOf(lid);
-    const items = project.items.filter((it) => it.levelId === lid);
+    // инженерия (розетки, светильники, выводы, радиаторы) живёт на стенах и потолке — в столкновениях не участвует
+    const items = project.items.filter((it) => it.levelId === lid && catalogItem(it.type)?.category !== 'mep');
     const rooms = project.rooms.filter((r) => r.levelId === lid);
     const stairs = stairsOf(lid);
     const below = levelBelow(project, lid);

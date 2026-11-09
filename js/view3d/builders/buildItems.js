@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { box, cylinder, mergeGeometries, mesh } from '../meshUtils.js';
-import { mat, glassMat } from '../materials.js';
+import { mat, glassMat, lampGlowMat } from '../materials.js';
 import { DEG } from '../../core/geometry.js';
 import { railingGeos, beam } from './railing.js';
 
@@ -42,7 +42,98 @@ function fence3(add, pts, height) {
   for (const m of g.metal) add(m, RAIL);
 }
 
+/** Цилиндр вдоль оси Z (к стене) или X, с центром в точке. */
+function zcyl(r, len, x, y, z, seg = 12) {
+  const g = new THREE.CylinderGeometry(r, r, len, seg);
+  g.rotateX(Math.PI / 2);
+  g.translate(x, y, z);
+  return g;
+}
+function xcyl(r, len, x, y, z, seg = 10) {
+  const g = new THREE.CylinderGeometry(r, r, len, seg);
+  g.rotateZ(Math.PI / 2);
+  g.translate(x, y, z);
+  return g;
+}
+
+/** Рамка-накладка на стене (розетки, выключатели): лицо на +Z, задняя сторона у стены. */
+function plate(add, w, h, d, c) {
+  add(box(w, h, d * 0.6, 0, 0, -d * 0.2), c);
+}
+
 const B = {
+  // ── инженерия ──
+  socket(add, w, d, h, c) {
+    plate(add, w, h, d, c);
+    const n = Math.max(1, Math.round(w / 0.075));
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + (w / n) * (i + 0.5);
+      add(zcyl(Math.min(0.026, w / n / 2 - 0.008), 0.012, x, h / 2, d * 0.1 + 0.006, 14), '#e2e2df');
+    }
+  },
+  socket_double(add, w, d, h, c) {
+    B.socket(add, w, d, h, c);
+  },
+  socket_kitchen(add, w, d, h, c) {
+    B.socket(add, w, d, h, c);
+  },
+  switch(add, w, d, h, c) {
+    plate(add, w, h, d, c);
+    add(box(w * 0.6, h * 0.6, 0.012, 0, h * 0.2, d * 0.1 + 0.006), '#e6e6e3');
+  },
+  ceiling_light(add, w, d, h, c) {
+    add(cylinder(0.05, 0.02, 0, h - 0.02, 0, 12), c);
+    add(cylinder(0.008, h - 0.06, 0, 0.04, 0, 6), DARK);
+    add(sphere(w / 2, 0, w / 4, 0, 0.45, 2), null, { glow: true });
+  },
+  spot_light(add, w, d, h, c) {
+    add(cylinder(w / 2, h * 0.4, 0, h * 0.6, 0, 14), c);
+    add(cylinder(w * 0.38, 0.01, 0, h * 0.55, 0, 14), null, { glow: true });
+  },
+  wall_lamp(add, w, d, h, c) {
+    add(box(0.08, 0.12, 0.03, 0, h * 0.25, -d / 2 + 0.015), METAL);
+    const arm = beam({ x: 0, y: h * 0.3, z: -d / 2 + 0.03 }, { x: 0, y: h * 0.45, z: d * 0.1 }, 0.02, 0.02);
+    if (arm) add(arm, METAL);
+    add(cone(w / 2, h * 0.6, 0, h * 0.3, d * 0.12, 16), null, { glow: true });
+  },
+  el_panel(add, w, d, h, c) {
+    add(box(w, h, d), c);
+    add(box(w * 0.86, h * 0.86, 0.01, 0, h * 0.07, d / 2), lighten(c));
+    add(box(0.02, 0.06, 0.02, w * 0.36, h * 0.47, d / 2 + 0.01), DARK);
+  },
+  water_point(add, w, d, h, c) {
+    add(zcyl(0.035, 0.012, 0, h / 2, -d / 2 + 0.006), METAL);
+    add(zcyl(0.015, d, 0, h / 2, 0, 10), c);
+    add(zcyl(0.018, 0.02, 0, h / 2, d / 2 - 0.01, 10), METAL);
+  },
+  sewer_point(add, w, d, h, c) {
+    add(zcyl(w / 2, d, 0, h / 2, 0, 14), '#8a6a52');
+    add(zcyl(w / 2 - 0.012, 0.004, 0, h / 2, d / 2, 14), DARK);
+  },
+  floor_drain(add, w, d, h, c) {
+    add(box(w, 0.008, d, 0, 0, 0), c);
+    for (let i = 1; i < 5; i++) add(box(0.006, 0.004, d * 0.8, -w / 2 + (w / 5) * i, 0.008, 0), DARK);
+  },
+  water_heater(add, w, d, h, c) {
+    add(cylinder(Math.min(w, d) / 2, h, 0, 0, 0, 20), c);
+    add(box(0.12, 0.05, 0.02, 0, h * 0.45, Math.min(w, d) / 2), '#3d6f9c');
+    for (const sx of [-1, 1]) add(cylinder(0.012, 0.12, sx * 0.07, -0.12, 0, 8), sx < 0 ? '#2f7fd1' : '#d6452f');
+  },
+  radiator(add, w, d, h, c) {
+    const n = Math.max(3, Math.round(w / 0.08));
+    const sw = w / n;
+    for (let i = 0; i < n; i++) add(box(sw * 0.78, h, d * 0.8, -w / 2 + sw * (i + 0.5), 0, 0.01), c);
+    add(box(w, 0.04, d * 0.5, 0, h - 0.06, 0), c);
+    add(box(w, 0.04, d * 0.5, 0, 0.02, 0), c);
+    for (const sx of [-1, 1]) add(box(0.03, 0.08, 0.04, sx * (w / 2 - 0.08), h * 0.4, -d / 2 + 0.02), METAL);
+  },
+  towel_rail(add, w, d, h, c) {
+    for (const sx of [-1, 1]) add(cylinder(0.014, h, sx * (w / 2 - 0.02), 0, d * 0.1, 10), c);
+    const n = Math.max(3, Math.round(h / 0.16));
+    for (let i = 0; i < n; i++) add(xcyl(0.01, w - 0.04, 0, 0.06 + ((h - 0.12) * i) / (n - 1), d * 0.1, 8), c);
+    for (const sy of [0.15, 0.85]) add(box(0.03, 0.03, d * 0.6, -w / 2 + 0.02, h * sy, -d * 0.2), METAL);
+  },
+
   balcony(add, w, d, h, c) {
     // плита-консоль вровень с полом этажа и ограждение с трёх сторон
     add(box(w, 0.16, d, 0, -0.16, 0), c);
@@ -458,10 +549,10 @@ function darken(hex) {
  * Модель объекта. Детали одного цвета объединяются в одну геометрию.
  * @returns {THREE.Group}
  */
-export function buildItem(item, baseY) {
+export function buildItem(item, baseY, elevation = item.elevation || 0) {
   const parts = new Map();
   const add = (geom, color, opts = {}) => {
-    const key = opts.glass ? 'glass' : `${color || item.color}|${opts.opacity ?? 1}`;
+    const key = opts.glass ? 'glass' : opts.glow ? 'glow' : `${color || item.color}|${opts.opacity ?? 1}`;
     if (!parts.has(key)) parts.set(key, { geoms: [], color: color || item.color, opts });
     parts.get(key).geoms.push(geom);
   };
@@ -471,10 +562,10 @@ export function buildItem(item, baseY) {
   for (const p of parts.values()) {
     const g = mergeGeometries(p.geoms);
     if (!g) continue;
-    const material = p.opts.glass ? glassMat() : mat(p.color, { opacity: p.opts.opacity });
-    group.add(mesh(g, material, { kind: 'item', id: item.id }, { cast: !p.opts.glass }));
+    const material = p.opts.glass ? glassMat() : p.opts.glow ? lampGlowMat : mat(p.color, { opacity: p.opts.opacity });
+    group.add(mesh(g, material, { kind: 'item', id: item.id }, { cast: !p.opts.glass && !p.opts.glow }));
   }
-  group.position.set(item.x, baseY + (item.elevation || 0), item.y);
+  group.position.set(item.x, baseY + elevation, item.y);
   group.rotation.y = -(item.rotation || 0) * DEG;
   group.userData.ref = { kind: 'item', id: item.id };
   return group;

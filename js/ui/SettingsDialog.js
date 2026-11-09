@@ -1,5 +1,6 @@
 /** Настройки: тема, шаг привязки, что показывать на плане и в 3D. */
 import { SPAWN_MODES } from '../model/defaults.js';
+import { LAYERS } from '../model/layers.js';
 import { h, icon } from './dom.js';
 import { openModal } from './feedback.js';
 
@@ -24,6 +25,7 @@ const TOGGLES = [
     ['roofs2d', 'Контуры крыш'],
     ['checks', 'Подсвечивать ошибки: предметы друг в друге, в стенах, загороженные двери'],
   ]],
+  ['Слои плана и 3D', LAYERS.map(([k, l]) => [`layer_${k}`, l])],
   ['3D', [
     ['shadows', 'Тени (нагружает слабые телефоны)'],
     ['edges', 'Контуры граней'],

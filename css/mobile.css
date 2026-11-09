@@ -185,6 +185,17 @@
 .ctx-item kbd {
   margin-left: auto;
 }
+.ctx-check {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--accent);
+}
+.ctx-toggle:not(.active) .ctx-check {
+  visibility: hidden;
+}
+.ctx-toggle:not(.active) > span:not(.ctx-check) {
+  color: var(--ink-3);
+}
 .ctx-sep {
   height: 1px;
   margin: 5px 4px;

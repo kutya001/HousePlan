@@ -4,6 +4,7 @@ import { ZONE_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, polygonArea, dist, lerp } from '../../core/geometry.js';
 import { fmtSotki } from '../../core/format.js';
 import { drawItemSymbol } from './symbols2d.js';
+import { itemVisible } from '../../model/layers.js';
 import { SITE_LEVEL } from '../../model/project.js';
 
 export function drawSite(ctx, r) {
@@ -118,7 +119,7 @@ function dots(ctx, bb, step, radius, color) {
 }
 
 export function drawSiteItems(ctx, r) {
-  const items = r.project.items.filter((i) => i.levelId === SITE_LEVEL);
+  const items = r.project.items.filter((i) => i.levelId === SITE_LEVEL && itemVisible(r.settings, i));
   // низкие объекты (бассейн, грядки) — первыми
   items.sort((a, b) => a.h - b.h);
   for (const it of items) drawItemSymbol(ctx, it, r.px(1.1));

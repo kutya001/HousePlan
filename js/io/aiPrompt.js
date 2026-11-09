@@ -67,8 +67,10 @@ const list = (obj, fn = (v) => v) => Object.entries(obj).map(([k, v]) => `${k} �
 function catalogText() {
   const indoor = CATALOG.filter((c) => !c.outdoor);
   const outdoor = CATALOG.filter((c) => c.outdoor);
-  const row = (c) => `${c.type} — ${c.name}, ${c.w}×${c.d}×${c.h} м${c.wallSnap ? ', спинкой к стене' : ''}${c.elevation ? `, на высоте ${c.elevation} м` : ''}`;
-  return `Мебель и оборудование дома (furniture):\n${indoor.map(row).join('\n')}\n\nОбъекты участка (outdoor):\n${outdoor.map(row).join('\n')}`;
+  const row = (c) => `${c.type} — ${c.name}, ${c.w}×${c.d}×${c.h} м${c.wallSnap ? ', спинкой к стене' : ''}${c.ceiling ? ', под потолком' : c.elevation ? `, на высоте ${c.elevation} м` : ''}`;
+  const mep = indoor.filter((c) => c.category === 'mep');
+  const furn = indoor.filter((c) => c.category !== 'mep');
+  return `Мебель и оборудование дома (furniture):\n${furn.map(row).join('\n')}\n\nИнженерия (тоже в furniture; розетки и выключатели — у стен, светильник — по центру комнаты, выводы воды и канализации — у сантехники, радиаторы — под окнами):\n${mep.map(row).join('\n')}\n\nОбъекты участка (outdoor):\n${outdoor.map(row).join('\n')}`;
 }
 
 /**
@@ -119,6 +121,7 @@ ${JSON.stringify(toExchange(project))}
 КОМНАТЫ (rooms)
 - Многоугольник points по ОСЯМ стен (углы — в точках пересечения осей), обход по или против часовой — не важно. Комнаты не перекрываются.
 - floor — покрытие: ${list(FLOOR_MATERIALS, (v) => v.name)}.
+- heatedFloor: true — тёплый пол (обычно санузлы, кухня, прихожая).
 - Ориентиры площадей: спальня 10–16 м², гостиная 18–30, кухня 8–14, санузел 3.5–6, прихожая 4–8, коридор шириной не меньше 1.0 м.
 
 ЛЕСТНИЦЫ (stairs) — ставятся на НИЖНЕМ этаже и ведут на следующий

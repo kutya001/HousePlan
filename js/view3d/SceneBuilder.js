@@ -9,6 +9,7 @@ import { buildWalls } from './builders/buildWalls.js';
 import { buildFloors, buildStairs, buildStairGuards, buildRoof } from './builders/buildStructure.js';
 import { buildItem } from './builders/buildItems.js';
 import { edgeMaterial } from './materials.js';
+import { itemVisible, itemElevation } from '../model/layers.js';
 
 /**
  * Строим все этажи и крыши; «разрез» по активному этажу — это просто видимость
@@ -21,9 +22,9 @@ export function buildScene(project, opts) {
   root.name = 'building';
 
   root.add(buildSite(project));
-  if (opts.furniture) {
-    for (const it of project.items.filter((i) => i.levelId === SITE_LEVEL)) root.add(buildItem(it, 0));
-  }
+  // слои (электрика, сантехника, отопление) — те же переключатели, что на плане
+  const shown = (it) => opts.furniture && itemVisible(opts.layers, it);
+  for (const it of project.items.filter((i) => i.levelId === SITE_LEVEL && shown(i))) root.add(buildItem(it, 0));
 
   const ground = groundLevel(project);
   project.levels.forEach((level, i) => {
@@ -34,7 +35,7 @@ export function buildScene(project, opts) {
     g.add(buildWalls(project, level.id, base, { plinth: i === 0, porch: level === ground }));
     g.add(buildStairs(project, level.id, base));
     g.add(buildStairGuards(project, level.id, base));
-    if (opts.furniture) for (const it of project.items.filter((x) => x.levelId === level.id)) g.add(buildItem(it, base));
+    for (const it of project.items.filter((x) => x.levelId === level.id && shown(x))) g.add(buildItem(it, base, itemElevation(project, it)));
     g.userData.levelIndex = i;
     root.add(g);
   });

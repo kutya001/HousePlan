@@ -57,7 +57,9 @@ export function toExchange(project) {
         return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}) };
       }),
       openings: [],
-      rooms: project.rooms.filter((r) => r.levelId === level.id).map((r) => ({ name: r.name, floor: r.floor, points: r.points.map(pt) })),
+      rooms: project.rooms
+        .filter((r) => r.levelId === level.id)
+        .map((r) => ({ name: r.name, floor: r.floor, ...(r.heatedFloor ? { heatedFloor: true } : {}), points: r.points.map(pt) })),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
         .map((s) => ({ shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) })),
@@ -356,7 +358,9 @@ function importLevel(project, lvl, l, k, warnings) {
   const rooms = (l.rooms || []).map((r) => ({ r, pts: points(r.points ?? r.polygon, k) })).filter((x) => x.pts.length >= 3);
   for (const { r, pts } of rooms) {
     const floor = FLOOR_MATERIALS[r.floor] ? r.floor : 'laminate';
-    project.rooms.push(createRoom(lvl.id, pts, { name: String(r.name || 'Комната'), floor }));
+    const room = createRoom(lvl.id, pts, { name: String(r.name || 'Комната'), floor });
+    if (r.heatedFloor === true) room.heatedFloor = true;
+    project.rooms.push(room);
   }
   if (!rooms.length && walls.length) {
     const faces = findFaces(walls);

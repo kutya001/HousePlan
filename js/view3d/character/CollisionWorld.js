@@ -8,6 +8,7 @@
  *
  * Координаты: x, z — план (z = y плана), y — высота над землёй.
  */
+import { catalogItem } from '../../model/catalog.js';
 import { computeWallGeometry, wallPieces3D, clipWallRange } from '../../geometry/wallGeometry.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { porchSteps } from '../../geometry/porch.js';
@@ -185,6 +186,8 @@ export class CollisionWorld {
   }
 
   _addItem(it, base) {
+    // розетки, светильники, выводы труб — сквозь них манекен проходит
+    if (catalogItem(it.type)?.category === 'mep' && it.type !== 'water_heater' && it.type !== 'el_panel') return;
     const y0 = base + (it.elevation || 0);
     const ref = { kind: 'item', id: it.id };
     if (TRUNK.has(it.type)) {

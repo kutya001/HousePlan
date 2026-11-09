@@ -14,6 +14,7 @@ import { stairLayout } from '../../geometry/stairGeometry.js';
 import { stairRise } from '../render/drawStairs.js';
 import { normalizeDeg, pointInPolygon } from '../../core/geometry.js';
 import { levelAbove, groundLevel, isRoofTerrace } from '../../model/project.js';
+import { itemLayer, layerVisible, LAYERS } from '../../model/layers.js';
 
 export class PlaceTool extends Tool {
   constructor(editor, what) {
@@ -45,6 +46,12 @@ export class PlaceTool extends Tool {
       if (c?.outdoor && ground && this.levelId !== ground && !isRoofTerrace(this.project, this.levelId)) {
         this.state.setLevel(ground);
         this.toast('Объекты участка ставятся на землю — переключено на первый этаж');
+      }
+      // ставим розетку при скрытой электрике — слой включается сам
+      const layer = itemLayer({ type: this.settings.type });
+      if (!layerVisible(this.state.settings, layer)) {
+        this.state.setSetting(`layer_${layer}`, true);
+        this.toast(`Слой «${LAYERS.find(([k]) => k === layer)?.[1]}» снова показан`);
       }
       this.app.bus.emit('tool:options-refresh');
     }
@@ -179,7 +186,7 @@ export class PlaceTool extends Tool {
       drawAlign(ctx, r, this.align, g);
       return;
     }
-    drawItemSymbol(ctx, g, r.px(1.1), { alpha: 0.7 });
+    drawItemSymbol(ctx, g, r.px(1.1), { alpha: 0.7, px: r.px(1) });
     drawAlign(ctx, r, this.align, g);
     if (g._snapped) {
       ctx.save();

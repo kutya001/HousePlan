@@ -25,6 +25,11 @@ const DEFAULT_SETTINGS = {
   sunDay: 21,
   sunHour: 14,
   checks: true, // подсвечивать на плане пересечения и другие ошибки
+  // слои плана и 3D (Слои в строке состояния)
+  layer_furniture: true,
+  layer_electric: true,
+  layer_plumbing: true,
+  layer_heating: true,
 };
 
 export class AppState {

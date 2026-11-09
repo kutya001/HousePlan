@@ -12,7 +12,7 @@ import { drawRooms, drawRoomLabels } from './drawRooms.js';
 import { drawWalls, drawLowerLevel } from './drawWalls.js';
 import { drawOpenings } from './drawOpenings.js';
 import { drawStairs, drawStairwellsFromBelow } from './drawStairs.js';
-import { drawItems } from './drawItems.js';
+import { drawItems, drawMepItems } from './drawItems.js';
 import { drawRoofs } from './drawRoofs.js';
 import { drawDimensions } from './drawDimensions.js';
 import { drawSelection } from './drawSelection.js';
@@ -80,6 +80,7 @@ export class Renderer2D {
     drawItems(ctx, this);
     drawWalls(ctx, this);
     drawOpenings(ctx, this);
+    drawMepItems(ctx, this);
     if (this.settings.roofs2d) drawRoofs(ctx, this);
     drawRoomLabels(ctx, this);
     if (this.settings.dims) drawDimensions(ctx, this);

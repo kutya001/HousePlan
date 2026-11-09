@@ -76,7 +76,7 @@ export class View3D {
     bus.on('settings:changed', ({ key }) => {
       if (key.startsWith('sun')) this.applySun();
       if (key === 'cutaway') this.applyCutaway();
-      if (['roofs3d', 'edges', 'furniture3d'].includes(key)) this.invalidate();
+      if (['roofs3d', 'edges', 'furniture3d'].includes(key) || key.startsWith('layer_')) this.invalidate();
       if (key === 'shadows') {
         this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
         this.invalidate();
@@ -138,6 +138,7 @@ export class View3D {
       cutaway: s.cutaway || this.character.cutaway,
       roofs: s.roofs3d,
       furniture: s.furniture3d,
+      layers: s,
       edges: s.edges,
     });
     this.scene.add(this.root);
