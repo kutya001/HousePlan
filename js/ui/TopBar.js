@@ -99,6 +99,7 @@ export class TopBar {
       { label: 'Импорт и экспорт…', icon: 'swap', onClick: () => app.ui.exchange.open('import') },
       { label: 'Построить дом с ИИ…', icon: 'spark', onClick: () => app.ui.exchange.open('ai') },
       { separator: true },
+      { label: 'Варианты проекта и сравнение…', icon: 'copyv', onClick: () => app.ui.variants.open() },
       { label: 'Смета и спецификации…', icon: 'calc', onClick: () => app.ui.estimate.open() },
       { label: 'Чертежи для печати и PDF…', icon: 'print', onClick: () => app.ui.drawings.open() },
       { separator: true },

@@ -1385,3 +1385,85 @@ kbd {
     padding: 6px;
   }
 }
+
+/* ── Варианты проекта ───────────────────────────────────────────────── */
+.var {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.var-save {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.var-save .var-name {
+  flex: 1 1 220px;
+}
+.var-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.var-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  min-width: 0;
+}
+.var-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 72 / 50;
+  object-fit: contain;
+  border-radius: var(--radius-s);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.var-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--fs-s);
+}
+.var-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs);
+}
+.var-rename {
+  width: 100%;
+}
+.var-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.var-actions .btn {
+  flex: 1;
+}
+.var-h {
+  margin: 4px 0 0;
+  font-size: var(--fs-l);
+}
+.var-compare .var-cur {
+  background: var(--accent-soft);
+}
+.var-compare th.var-cur {
+  color: var(--accent);
+}
+.var-compare td.var-best {
+  color: var(--snap);
+  font-weight: 700;
+}
+.var-note {
+  margin: 0;
+  font-size: var(--fs-s);
+}

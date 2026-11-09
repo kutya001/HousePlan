@@ -69,7 +69,7 @@ function mainAngle(project) {
  * редактор (вид, этаж, тему) и всё возвращает обратно.
  * @returns dataURL
  */
-export function renderPlanImage(app, levelId, { scale, center, widthMm, heightMm, extras = null, settings = {}, noSite = true }) {
+export function renderPlanImage(app, levelId, { scale, center, widthMm, heightMm, extras = null, settings = {}, noSite = true, dpr = DPR, type = 'image/png' }) {
   const ed = app.editor;
   const vp = ed.viewport;
   const st = app.state;
@@ -91,10 +91,10 @@ export function renderPlanImage(app, levelId, { scale, center, widthMm, heightMm
     st.settings = { ...saved.settings, dims: true, lowerLevel: false, checks: false, compass: true, roofs2d: true, ...settings };
     r.printExtras = extras;
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    r.render(canvas.getContext('2d'), { dpr: DPR, overlay: false, exportMode: true, noSite });
-    return canvas.toDataURL('image/png');
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    r.render(canvas.getContext('2d'), { dpr, overlay: false, exportMode: true, noSite });
+    return canvas.toDataURL(type, 0.82);
   } finally {
     r.printExtras = null;
     Object.assign(vp, { cx: saved.cx, cy: saved.cy, scale: saved.scale, width: saved.width, height: saved.height });
@@ -105,6 +105,25 @@ export function renderPlanImage(app, levelId, { scale, center, widthMm, heightMm
     applyCanvasTheme(saved.dark);
     ed.requestRender?.();
   }
+}
+
+/** Миниатюра плана первого этажа (для вариантов проекта). */
+export function planThumb(app) {
+  const project = app.project;
+  const bbox = houseBBox(project);
+  if (!bbox) return null;
+  const W = 72;
+  const H = 50;
+  const scale = pickScale(bbox.w + 1, bbox.h + 1, W, H);
+  return renderPlanImage(app, groundLevel(project).id, {
+    scale,
+    center: { x: (bbox.minX + bbox.maxX) / 2, y: (bbox.minY + bbox.maxY) / 2 },
+    widthMm: W,
+    heightMm: H,
+    settings: { dims: false, compass: false, roofs2d: false },
+    dpr: 1.4,
+    type: 'image/jpeg',
+  });
 }
 
 /** Марки проёмов, номера помещений и линия разреза поверх плана. */
