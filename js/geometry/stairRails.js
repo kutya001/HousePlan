@@ -23,23 +23,35 @@ const NEAR = 0.14; // дальше этого от стены — сторона
  * @param layout — stairLayout()
  * @param wallPolys — многоугольники стен этажа лестницы
  * @param upperWallPolys — стены этажа выше (для ограждения проёма); null — проём не ограждаем
+ * @param opts — { blocked: Array<Array<{x,y}>> } — планы «занятых» областей (ступени
+ *   других лестниц, стоящих над этой): перила в этих местах не ставим
  * @returns {{ sides: Array<Array<{x,y,h}>>, guards: Array<Array<{x,y}>> }}
  */
-export function stairRails(stair, layout, wallPolys, upperWallPolys) {
+export function stairRails(stair, layout, wallPolys, upperWallPolys, opts = {}) {
   const mode = RAILINGS[stair.railing] ? stair.railing : 'auto';
   const out = { sides: [], guards: [] };
   if (mode === 'none') return out;
-  const free = (p, n, polys) => mode === 'both' || !polys.some((w) => pointInPolygon({ x: p.x + n.x * NEAR, y: p.y + n.y * NEAR }, w));
+  const blocked = (opts.blocked || []).filter((poly) => poly && poly.length >= 3);
+  const free = (p, n, polys) => mode === 'both' || (!polys.some((w) => pointInPolygon({ x: p.x + n.x * NEAR, y: p.y + n.y * NEAR }, w)) && !blocked.some((b) => pointInPolygon(p, b)));
   const steps = layout.steps;
 
   if (stair.shape === 'spiral') {
-    // по внешнему краю ступеней — винтом
-    const line = steps.map((st) => {
+    // по внешнему краю ступеней — винтом; где сверху стоит другая лестница — разрыв
+    let line = [];
+    let segs = [];
+    for (const st of steps) {
       const a = st.poly[0];
       const b = st.poly[Math.floor((st.poly.length - 2) / 2)];
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, h: st.top };
-    });
-    if (line.length > 1) out.sides.push(line);
+      const p = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, h: st.top };
+      if (blocked.some((bl) => pointInPolygon(p, bl))) {
+        if (line.length > 1) segs.push(line);
+        line = [];
+      } else {
+        line.push(p);
+      }
+    }
+    if (line.length > 1) segs.push(line);
+    out.sides.push(...segs);
   } else {
     // марши: две боковые линии на высоте ступеней
     let run = [];
@@ -69,7 +81,7 @@ export function stairRails(stair, layout, wallPolys, upperWallPolys) {
         }
       }
     }
-    // площадки: края, не прилегающие к маршам и стенам
+    // площадки: края, не прилегающие к маршам, стенам и лестнице сверху
     for (const st of steps.filter((s) => s.landing)) {
       const others = steps.filter((s) => !s.landing);
       edgesOf(st.poly).forEach(([a, b]) => {
