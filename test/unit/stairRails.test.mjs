@@ -1,11 +1,13 @@
-/** Перила лестниц, стоящих друг над другом: блокировка по высоте, а не по плану. */
+/**
+ * Перила лестниц, стоящих друг над другом: блокировка по высоте, а не по плану.
+ * ВАЖНО: rotation в проекте — в ГРАДУСАХ (toWorld/rectCorners принимают rotDeg).
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { stairLayout } from '../../js/geometry/stairGeometry.js';
 import { pointInPolygon } from '../../js/core/geometry.js';
 import {
-  stairRails, stairFootprintsAbove, stairFootprintsOverOpening,
-  RAIL_HEIGHT, GUARD_HEIGHT,
+  stairRails, stairFootprintsAbove, stairFootprintsOverOpening, RAIL_HEIGHT,
 } from '../../js/geometry/stairRails.js';
 
 const RISE = 3.05; // этаж 2.8 + перекрытие 0.25
@@ -20,6 +22,13 @@ const project = (stairs) => ({
   levels: [level('l1'), level('l2'), level('l3')],
   stairs,
 });
+
+// защита от путаницы градусов/радиан: при rotation: 180 первая ступень
+// повёрнутой лестницы обязана оказаться у y < 0 (при Math.PI ≈ 3° она у y > 0)
+const assertRotated180 = (s) => {
+  const first = stairLayout(s, RISE).steps[0].poly;
+  assert.ok(first.every((p) => p.y < 0), 'rotation задаётся в градусах: 180, а не Math.PI');
+};
 
 test('лестницы друг над другом, одинаковая ориентация: перила нижней сохраняются', () => {
   const s1 = stair('s1', 'l1');
@@ -36,7 +45,8 @@ test('лестницы друг над другом, одинаковая ори
 
 test('верхняя лестница повёрнута на 180°: перила нижней срезаются только у верха', () => {
   const s1 = stair('s1', 'l1');
-  const s2 = stair('s2', 'l2', { rotation: Math.PI });
+  const s2 = stair('s2', 'l2', { rotation: 180 }); // градусы!
+  assertRotated180(s2);
   const p = project([s1, s2]);
   const lay = stairLayout(s1, RISE);
   const blocked = stairFootprintsAbove(p, s1);
@@ -58,7 +68,8 @@ test('верхняя лестница повёрнута на 180°: перил�
 
 test('ограждение проёма обходит верхнюю лестницу и не перекрывает вход на неё', () => {
   const s1 = stair('s1', 'l1');
-  const s2 = stair('s2', 'l2', { rotation: Math.PI }); // начинается прямо над проёмом
+  const s2 = stair('s2', 'l2', { rotation: 180 }); // градусы! начинается прямо над проёмом
+  assertRotated180(s2);
   const p = project([s1, s2]);
   const lay = stairLayout(s1, RISE);
   const blocked = stairFootprintsOverOpening(p, 'l2', lay.outline);
