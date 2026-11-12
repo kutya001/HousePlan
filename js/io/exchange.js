@@ -9,6 +9,7 @@
  * запятые и комментарии убираются, мелкие неточности геометрии чинятся.
  */
 import { roofSurfaceAt, slopeRotation } from '../geometry/roofSurface.js';
+import { isMansardRoof, MANSARD, HALF_HIP } from '../geometry/roofGeometry.js';
 import { createEmptyProject, createLevel, normalizeProject, SITE_LEVEL, getLevel } from '../model/project.js';
 import { createWall, createOpening, createRoom, createStair, createItem, createRoof, createZone } from '../model/factories.js';
 import { CATALOG, catalogItem } from '../model/catalog.js';
@@ -17,6 +18,7 @@ import { FACADE_FINISHES, ROOF_COVERS } from '../model/finishes.js';
 import { RAILINGS } from '../geometry/stairRails.js';
 import { DEFAULTS, COLORS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { WALL_TYPES, WALL_FINISHES } from '../model/wallTypes.js';
+import { foundationOf, FOUNDATION_TYPES, PLINTH_FINISHES, BLIND_AREA } from '../model/foundation.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
 import { projectOnSegment, dist } from '../core/geometry.js';
@@ -85,6 +87,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
     name: project.name,
     units: 'm',
     foundation: r3(project.foundation ?? DEFAULTS.foundation),
+    ...foundationOut(project),
     ...(project.facade && project.facade !== 'plaster' ? { facade: project.facade } : {}),
     site: {
       boundary: project.site.boundary.map(pt),
@@ -122,7 +125,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
       furniture: project.items.filter((it) => it.levelId === level.id).map((it) => tag('f', itemOut(it), it, li)),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
-        .map((r) => tag('k', { type: r.type, x: r3(r.x), y: r3(r.y), w: r3(r.w), d: r3(r.d), rotation: r3(r.rotation || 0), pitch: r3(r.pitch), overhang: r3(r.overhang), ...(r.cover ? { cover: r.cover } : {}), ...(isColor(r.color) && r.color.toLowerCase() !== COLORS.roof.toLowerCase() ? { color: r.color } : {}) }, r, li)),
+        .map((r) => tag('k', roofOut(r), r, li)),
     };
     for (const o of project.openings) {
       if (!ids.has(o.wallId)) continue;
@@ -144,6 +147,39 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
   out.outdoor = project.items.filter((it) => it.levelId === SITE_LEVEL).map((it) => tag('g', itemOut(it), it, 'site'));
   out.zones = project.zones.map((z) => tag('z', { material: z.material, points: z.points.map(pt) }, z, 'site'));
   return out;
+}
+
+/** Вид фундамента, отделка цоколя и отмостка — только то, что отличается от умолчаний. */
+function foundationOut(project) {
+  const f = foundationOf(project);
+  const plinth = { ...(f.finish !== 'stone' ? { finish: f.finish } : {}), ...(isColor(project.plinthColor) ? { color: project.plinthColor } : {}) };
+  return {
+    ...(f.type !== 'strip' ? { foundationType: f.type } : {}),
+    ...(Object.keys(plinth).length ? { plinth } : {}),
+    ...(Math.abs(f.blind - BLIND_AREA) > 1e-6 ? { blindArea: r3(f.blind) } : {}),
+  };
+}
+
+/** Крыша: общие поля и то, что есть только у её вида (ломаная, полувальмовая, плоская). */
+function roofOut(r) {
+  const mansard = isMansardRoof(r);
+  return {
+    type: r.type,
+    x: r3(r.x),
+    y: r3(r.y),
+    w: r3(r.w),
+    d: r3(r.d),
+    rotation: r3(r.rotation || 0),
+    pitch: r3(r.pitch),
+    ...(mansard ? { pitch2: r3(r.pitch2 ?? MANSARD.pitch2), breakHeight: r3(r.breakH ?? MANSARD.breakH) } : {}),
+    ...(r.type === 'halfhip' ? { hipPart: r3(r.hipPart ?? HALF_HIP) } : {}),
+    overhang: r3(r.overhang),
+    ...(r.type === 'flat' && r.parapet > 0 ? { parapet: r3(r.parapet) } : {}),
+    ...(r.cover ? { cover: r.cover } : {}),
+    // водостоки есть по умолчанию — в JSON только их отсутствие
+    ...(r.gutters || r.type === 'flat' ? {} : { gutters: false }),
+    ...(isColor(r.color) && r.color.toLowerCase() !== COLORS.roof.toLowerCase() ? { color: r.color } : {}),
+  };
 }
 
 function itemOut(it) {
@@ -319,6 +355,11 @@ export function fromExchange(data) {
   project.levels = [];
   project.foundation = num(data.foundation, DEFAULTS.foundation / k) * k;
   if (FACADE_FINISHES[data.facade]) project.facade = data.facade;
+  if (FOUNDATION_TYPES[data.foundationType]) project.foundationType = data.foundationType;
+  const plinth = data.plinth && typeof data.plinth === 'object' ? data.plinth : {};
+  if (PLINTH_FINISHES[plinth.finish]) project.plinthFinish = plinth.finish;
+  if (isColor(plinth.color)) project.plinthColor = plinth.color;
+  if (data.blindArea !== undefined) project.blindArea = clamp(num(data.blindArea, BLIND_AREA / k) * k, 0, 3);
   const site = data.site || {};
   const boundary = points(site.boundary, k);
   if (boundary.length >= 3) project.site.boundary = boundary;
@@ -474,16 +515,25 @@ function importLevel(project, lvl, l, k, warnings, mark = (e) => e) {
   for (const it of l.furniture || l.items || []) mark(addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings), it);
   for (const r of l.roofs || (l.roof ? [l.roof] : [])) {
     const type = ROOF_TYPES[r.type] ? r.type : 'gable';
-    project.roofs.push(
-      mark(createRoof(lvl.id, num(r.x, 0) * k, num(r.y, 0) * k, Math.max(0.5, num(r.w, 8) * k), Math.max(0.5, num(r.d, 8) * k), {
-        type,
-        rotation: num(r.rotation, 0),
-        pitch: clamp(num(r.pitch, DEFAULTS.roof.pitch), 0, 60),
-        overhang: clamp(num(r.overhang, DEFAULTS.roof.overhang / k) * k, 0, 2),
-        ...(ROOF_COVERS[r.cover] ? { cover: r.cover } : {}),
-        ...(isColor(r.color) ? { color: r.color } : {}),
-      }), r),
-    );
+    const lim = (v, lo, hi, scale = 1) => clamp(num(v, lo / scale) * scale, lo, hi);
+    const roof = createRoof(lvl.id, num(r.x, 0) * k, num(r.y, 0) * k, Math.max(0.5, num(r.w, 8) * k), Math.max(0.5, num(r.d, 8) * k), {
+      type,
+      rotation: num(r.rotation, 0),
+      gutters: r.gutters !== false,
+      ...(ROOF_COVERS[r.cover] ? { cover: r.cover } : {}),
+      ...(isColor(r.color) ? { color: r.color } : {}),
+    });
+    // заданные значения — как есть (createRoof подставляет лишь то, чего не дали)
+    if (r.pitch !== undefined) roof.pitch = clamp(num(r.pitch, roof.pitch), 0, 85);
+    if (r.overhang !== undefined) roof.overhang = clamp(num(r.overhang, roof.overhang / k) * k, 0, 2);
+    if (isMansardRoof(roof)) {
+      if (r.pitch2 !== undefined) roof.pitch2 = lim(r.pitch2, 5, 60);
+      const bh = r.breakHeight ?? r.breakH;
+      if (bh !== undefined) roof.breakH = lim(bh, 0.3, 8, k);
+    }
+    if (type === 'halfhip' && r.hipPart !== undefined) roof.hipPart = lim(r.hipPart, 0.1, 0.9);
+    if (type === 'flat' && r.parapet !== undefined) roof.parapet = lim(r.parapet, 0, 1.5, k);
+    project.roofs.push(mark(roof, r));
   }
 }
 

@@ -67,6 +67,8 @@ export const CATALOG = [
   { type: 'balcony', name: 'Балкон', category: 'structure', w: 3.0, d: 1.2, h: 1.0, color: '#c9c3b8', wallSnap: true, attached: true },
   { type: 'canopy', name: 'Козырёк над входом', category: 'structure', w: 2.2, d: 1.3, h: 0.16, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4 },
   { type: 'roof_window', name: 'Мансардное окно', category: 'structure', w: 0.78, d: 1.18, h: 0.12, color: '#4a4f55', roofMount: true },
+  // дымоход идёт от пола своего этажа сквозь перекрытия и кровлю — высоту считает программа
+  { type: 'chimney', name: 'Дымоход', category: 'structure', w: 0.5, d: 0.5, h: 3.0, color: '#8a5646', chimney: true },
   { type: 'carport', name: 'Навес для машины', category: 'structure', w: 3.6, d: 6.0, h: 2.7, color: '#6d7276', outdoor: true },
 
   // Инженерия: layer — слой плана (электрика, сантехника, отопление);

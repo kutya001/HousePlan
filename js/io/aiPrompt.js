@@ -8,6 +8,9 @@ import { WALL_TYPES, WALL_TYPE_GROUPS, WALL_FINISHES } from '../model/wallTypes.
 import { CATALOG } from '../model/catalog.js';
 import { FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, OPENING_STYLES, DEFAULTS } from '../model/defaults.js';
 import { toExchange } from './exchange.js';
+import { FOUNDATION_TYPES, PLINTH_FINISHES, BLIND_AREA } from '../model/foundation.js';
+import { FACADE_FINISHES, roofCoverOptions } from '../model/finishes.js';
+import { MANSARD, HALF_HIP } from '../geometry/roofGeometry.js';
 
 /** Небольшой пример: одноэтажный дом 8×6 с двумя комнатами, санузлом и крышей. */
 export const EXAMPLE = {
@@ -95,6 +98,7 @@ export function formatRules() {
 - kind: "floor" — обычный этаж; "basement" — подвал или цокольный этаж (только в начале списка, под первым этажом); "attic" — мансарда (только последней).
 - height — высота в чистоте (обычно 2.7–3.0; подвал 2.2–2.6), slab — толщина перекрытия над этажом (0.2–0.3).
 - foundation (в корне) — на сколько пол первого этажа выше земли (цоколь, 0.3–0.6). Для цокольного этажа с окнами над землёй — 1.0–1.5. Отметки этажей программа считает сама; подвал уходит в землю на (height + slab − foundation).
+- Фундамент и цоколь (в корне, всё необязательно): "foundationType" — ${list(FOUNDATION_TYPES, (v) => v.name)} (по умолчанию "strip"; сваи — для лёгких домов и уклона: под домом остаётся просвет; если есть подвал, поле не нужно); "plinth": { "finish", "color" } — отделка цоколя: ${list(PLINTH_FINISHES, (v) => v.name)}; "blindArea" — ширина отмостки вокруг дома, м (по умолчанию ${BLIND_AREA}, 0 — без неё). "facade" — отделка фасада всего дома: ${list(FACADE_FINISHES)}.
 - Мансарда: kind "attic", kneeWall — высота «колена» (от пола до начала скатов, 0.8–1.5). Её наружные стены задай как у этажа ниже (те же координаты) — программа сама поднимет их до конька и срежет скатами, получатся фронтоны. Крышу (roofs) ставь на мансарду, уклон 35–45°.
 - Каждый этаж описывает СВОИ стены полностью. Наружные стены верхних этажей обычно повторяют координаты этажа ниже.
 
@@ -134,6 +138,9 @@ export function formatRules() {
 КРЫШИ (roofs) — на самом верхнем этаже (или мансарде)
 - type: ${list(ROOF_TYPES)}. Прямоугольник x, y (центр), w × d — НАРУЖНЫЕ размеры дома (по осям + толщина стены). Конёк идёт вдоль w; если конёк должен идти вдоль y — rotation 90 и w — размер по y.
 - pitch — уклон в градусах (обычно 25–35, мансарда 35–45), overhang — свес 0.4–0.6. Г-образный дом — две крыши над крыльями.
+- "hip" — вальмовая (четыре ската), "pyramid" — шатровая (скаты сходятся в точку; для домов, близких к квадрату), "halfhip" — полувальмовая: фронтон, верх которого срезан вальмой; hipPart — доля высоты фронтона под вальмой (0.3–0.5, по умолчанию ${HALF_HIP}).
+- Ломаная крыша ("mansard" — двускатная, "mansard4" — четырёхскатная) — под жилую мансарду: pitch — уклон НИЖНЕГО крутого ската (55–70, по умолчанию ${MANSARD.pitch}), pitch2 — верхнего пологого (20–35, по умолчанию ${MANSARD.pitch2}), breakHeight — высота перелома над верхом стен (1.8–2.5, по умолчанию ${MANSARD.breakH}), overhang — короткий, 0.2–0.3.
+- cover — покрытие: скатные — ${list(roofCoverOptions({ type: 'gable' }))}; плоская — ${list(roofCoverOptions({ type: 'flat' }))}. color — цвет кровли. parapet — парапет плоской крыши, м (0.3–0.6). Водостоки (желоба и трубы) ставятся сами; "gutters": false — без них.
 - ПЛОСКАЯ ЭКСПЛУАТИРУЕМАЯ КРОВЛЯ (терраса на крыше, «зелёная крыша»): добавь последним этажом kind "floor" — наружные стены по контуру дома с height 1.1 (парапет), пол (rooms) по всему контуру, лестницу на этаже ниже. Выход на крышу — будка или летняя кухня из стен полной высоты (height не указывай) с дверью и своей плоской крышей (roofs с type "flat" только над будкой). Беседку, грядки, мангал, скамейки, кашпо ставь в furniture этого этажа — они останутся на крыше. Отдельную скатную крышу над таким этажом не ставь.
 
 МЕБЕЛЬ И ОБЪЕКТЫ
@@ -158,7 +165,7 @@ ${catalogText()}
 Программа сама проверяет это при загрузке и покажет ошибки красным — лучше сразу ответить без них.
 
 СТРУКТУРА JSON
-- Корень: { "format": "houseplan-ai", "version": 1, "name", "units": "m", "foundation", "site", "levels": [ … ], "outdoor": [ … ], "zones": [ … ] }.
+- Корень: { "format": "houseplan-ai", "version": 1, "name", "units": "m", "foundation", "foundationType", "plinth", "blindArea", "facade", "site", "levels": [ … ], "outdoor": [ … ], "zones": [ … ] }.
 - Этаж: { "name", "kind", "height", "slab", "kneeWall" (только мансарда), "walls", "openings", "rooms", "stairs", "furniture", "roofs" }.
 - color — необязательный цвет "#rrggbb" у стены, предмета или крыши (когда просят покрасить). model и name у предмета type "custom" — своя 3D-модель пользователя: не меняй их и не придумывай новые.
 - Значения по умолчанию: толщина наружной стены ${DEFAULTS.wall.exterior.thickness}, перегородки ${DEFAULTS.wall.interior.thickness}, высота этажа ${DEFAULTS.levelHeight}, перекрытие ${DEFAULTS.slab}, цоколь ${DEFAULTS.foundation}.`;

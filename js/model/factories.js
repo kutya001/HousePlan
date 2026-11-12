@@ -4,6 +4,7 @@ import { DEFAULTS, COLORS } from './defaults.js';
 import { catalogItem } from './catalog.js';
 import { WALL_TYPES } from './wallTypes.js';
 import { SITE_LEVEL } from './project.js';
+import { MANSARD, HALF_HIP, isMansardRoof } from '../geometry/roofGeometry.js';
 
 /**
  * @param opts.type — тип стены из каталога (model/wallTypes.js): задаёт роль и толщину по умолчанию
@@ -98,11 +99,15 @@ export function createItem(levelId, type, x, y, opts = {}) {
   };
 }
 
+/**
+ * @param opts { type, rotation, pitch, overhang, color, cover, gutters,
+ *               pitch2, breakH — ломаная крыша; hipPart — полувальмовая; parapet — плоская }
+ */
 export function createRoof(levelId, x, y, w, d, opts = {}) {
-  return {
+  const roof = {
     id: uid('roof'),
     levelId,
-    type: opts.type || 'gable',
+    type: 'gable',
     x,
     y,
     w,
@@ -111,8 +116,30 @@ export function createRoof(levelId, x, y, w, d, opts = {}) {
     pitch: opts.pitch ?? DEFAULTS.roof.pitch,
     overhang: opts.overhang ?? DEFAULTS.roof.overhang,
     color: opts.color ?? COLORS.roof,
+    gutters: opts.gutters ?? true,
     ...(opts.cover ? { cover: opts.cover } : {}),
   };
+  for (const k of ['pitch2', 'breakH', 'hipPart', 'parapet']) if (Number.isFinite(opts[k])) roof[k] = opts[k];
+  setRoofType(roof, opts.type || 'gable');
+  return roof;
+}
+
+/**
+ * Сменить вид крыши и подставить то, без чего он не имеет смысла: ломаной — крутой
+ * нижний скат, пологий верхний и высоту перелома; обычной после ломаной — обычный уклон.
+ */
+export function setRoofType(roof, type) {
+  const was = isMansardRoof(roof);
+  roof.type = type;
+  if (isMansardRoof(roof)) {
+    if (!was && (roof.pitch ?? 0) < 45) roof.pitch = MANSARD.pitch;
+    // крутой скат с длинным свесом опускается на окна — у ломаной крыши свес короткий
+    if (!was && (roof.overhang ?? 0) > MANSARD.overhang) roof.overhang = MANSARD.overhang;
+    roof.pitch2 ??= MANSARD.pitch2;
+    roof.breakH ??= MANSARD.breakH;
+  } else if (was && roof.pitch > 45) roof.pitch = DEFAULTS.roof.pitch;
+  if (type === 'halfhip') roof.hipPart ??= HALF_HIP;
+  return roof;
 }
 
 export function createZone(points, material = 'lawn') {

@@ -23,7 +23,7 @@ export function renderForm(fields, getTarget, getProject, onChange) {
     const id = `f${++uidCounter}`;
     const row = h('div', { class: `form-row form-${f.type}` });
     const label = h('label', { for: id, class: 'form-label' }, typeof f.label === 'function' ? f.label(target, getProject()) : f.label);
-    if (f.hint) label.title = f.hint;
+    if (f.hint) label.title = typeof f.hint === 'function' ? f.hint(target, getProject()) : f.hint;
     let control;
     let read;
     let write;

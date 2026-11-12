@@ -5,6 +5,7 @@
  * {
  *   version, name,
  *   foundation,                       // высота цоколя
+ *   foundationType, plinthFinish, plinthColor, blindArea,  // вид фундамента, отделка цоколя, отмостка (model/foundation.js)
  *   site:   { boundary:[{x,y}], fence:{ enabled, height } },
  *   levels: [{ id, name, kind, height, slab, kneeWall }], // kind: floor | basement | attic
  *   walls:    [{ id, levelId, x1,y1,x2,y2, thickness, height|null, kind, color|null }],
@@ -73,6 +74,9 @@ export function createEmptyProject(name = 'Новый проект') {
     version: SCHEMA_VERSION,
     name,
     foundation: DEFAULTS.foundation,
+    foundationType: 'strip',
+    plinthFinish: 'stone',
+    blindArea: 0.8,
     site: {
       boundary: rectPoints(-12.5, -20, 25, 40), // 10 соток
       fence: { enabled: true, height: 1.8, color: COLORS.fence },

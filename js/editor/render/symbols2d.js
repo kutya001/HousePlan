@@ -139,6 +139,18 @@ const SYMBOLS = {
       line(ctx, w / 2, y, w / 2 + 0.05, y);
     }
   },
+  // дымоход: стенки и канал с крестом
+  chimney(ctx, w, d) {
+    ctx.beginPath();
+    ctx.rect(-w / 2, -d / 2, w, d);
+    fs(ctx);
+    const k = 0.28;
+    ctx.beginPath();
+    ctx.rect(-w * k, -d * k, w * 2 * k, d * 2 * k);
+    ctx.stroke();
+    line(ctx, -w * k, -d * k, w * k, d * k);
+    line(ctx, -w * k, d * k, w * k, -d * k);
+  },
   fireplace(ctx, w, d) {
     ctx.beginPath();
     ctx.rect(-w / 2, -d / 2, w, d);

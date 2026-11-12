@@ -160,6 +160,38 @@ export function clipPolygonHalfPlane(poly, origin, normal) {
 }
 
 /**
+ * Нижняя огибающая плоскостей h = a·x + b·y + c над выпуклым многоугольником:
+ * контур делится на участки, на каждом из которых ниже всех одна плоскость.
+ * Так устроены скаты крыши (каждый скат — плоскость) и срез стен мансарды.
+ * @returns {Array<{ poly, plane }>} участки выпуклые; plane — тот же объект, что передан
+ */
+export function lowerEnvelope(poly, planes) {
+  if (planes.length === 1) return [{ poly, plane: planes[0] }];
+  const parts = [];
+  for (let k = 0; k < planes.length; k++) {
+    const pk = planes[k];
+    let region = poly;
+    for (let j = 0; j < planes.length && region.length >= 3; j++) {
+      if (j === k) continue;
+      const pj = planes[j];
+      // оставить область, где pk ≤ pj:  A·p + C ≤ 0
+      const ax = pk.a - pj.a;
+      const ay = pk.b - pj.b;
+      const C = pk.c - pj.c;
+      const L2 = ax * ax + ay * ay;
+      if (L2 < 1e-12) {
+        // плоскости параллельны: остаётся нижняя (из совпадающих — первая)
+        if (C > 1e-9 || (Math.abs(C) <= 1e-9 && j < k)) region = [];
+        continue;
+      }
+      region = clipPolygonHalfPlane(region, { x: (-C * ax) / L2, y: (-C * ay) / L2 }, { x: -ax, y: -ay });
+    }
+    if (region.length >= 3) parts.push({ poly: region, plane: pk });
+  }
+  return parts;
+}
+
+/**
  * Многоугольник минус выпуклое «окно» (может пересекать край): непересекающиеся
  * куски — по одному на каждую сторону окна. Окно целиком внутри — не трогаем
  * (его делают отверстием), вне — многоугольник целиком.

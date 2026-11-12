@@ -4,7 +4,7 @@
  */
 import { DEG, polygonArea } from '../core/geometry.js';
 import { fmtArea, fmtSotki, fmtElev } from '../core/format.js';
-import { LEVEL_KINDS, levelElevation, kneeWall } from './project.js';
+import { LEVEL_KINDS, levelElevation, kneeWall, isBasement } from './project.js';
 import {
   COLORS,
   FLOOR_MATERIALS,
@@ -20,7 +20,10 @@ import {
 } from './defaults.js';
 import { catalogItem } from './catalog.js';
 import { LAYERS, itemLayer } from './layers.js';
-import { FACADE_FINISHES, ROOF_COVERS } from './finishes.js';
+import { FACADE_FINISHES, roofCover, roofCoverOptions, setRoofCover } from './finishes.js';
+import { roofPeak, isMansardRoof, MANSARD, HALF_HIP } from '../geometry/roofGeometry.js';
+import { setRoofType } from './factories.js';
+import { foundationOf, FOUNDATION_TYPES, FOUNDATION_NAMES, PLINTH_NAMES } from './foundation.js';
 import { roofSurfaceAt, slopeAngle } from '../geometry/roofSurface.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
@@ -88,7 +91,7 @@ function wallSide(w, p, side) {
   return wallSides(p, w.levelId, geoms).get(w.id)?.[side] || { outside: false, room: null };
 }
 
-const sideCtx = (w, p, side) => ({ outside: wallSide(w, p, side).outside, facade: p.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: COLORS.plinth });
+const sideCtx = (w, p, side) => ({ outside: wallSide(w, p, side).outside, facade: p.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: foundationOf(p).color, plinthFinish: foundationOf(p).finish });
 
 /** Два поля отделки одной стороны стены: материал и цвет. */
 function wallSideFields(side) {
@@ -278,21 +281,32 @@ export const SCHEMAS = {
     color('color', 'Цвет'),
   ],
   roof: [
-    select('type', 'Тип', ROOF_TYPES),
-    select('cover', 'Покрытие', ROOF_COVERS, { get: (r) => r.cover || 'metal', visible: (r) => r.type !== 'flat' }),
-    num('pitch', 'Уклон', { unit: '°', min: 0, max: 60, step: 1, visible: (r) => r.type !== 'flat' }),
-    num('overhang', 'Свес', { min: 0, max: 2 }),
+    select('type', 'Тип', ROOF_TYPES, { set: (r, v) => setRoofType(r, v), rebuild: true, bulk: true }),
+    { type: 'select', label: 'Покрытие', options: (r) => roofCoverOptions(r), get: (r) => roofCover(r), set: (r, v) => setRoofCover(r, v), bulk: true },
+    num('pitch', 'Уклон', { unit: '°', min: 0, max: 60, step: 1, visible: (r) => r.type !== 'flat' && !isMansardRoof(r), bulk: true }),
+    num('pitch', 'Уклон нижнего ската', { unit: '°', min: 45, max: 85, step: 1, visible: isMansardRoof }),
+    num('pitch2', 'Уклон верхнего ската', { unit: '°', min: 5, max: 60, step: 1, get: (r) => r.pitch2 ?? MANSARD.pitch2, visible: isMansardRoof }),
+    num('breakH', 'Высота перелома', { min: 0.5, max: 6, step: 0.05, hint: 'От верха стен до перелома скатов — высота крутой части', get: (r) => r.breakH ?? MANSARD.breakH, visible: isMansardRoof }),
+    num('hipPart', 'Вальма срезает', {
+      unit: '%',
+      min: 10,
+      max: 90,
+      step: 5,
+      hint: 'Какую часть высоты фронтона занимает вальма',
+      get: (r) => Math.round((r.hipPart ?? HALF_HIP) * 100),
+      set: (r, v) => (r.hipPart = v / 100),
+      visible: (r) => r.type === 'halfhip',
+    }),
+    num('overhang', 'Свес', { min: 0, max: 2, bulk: true }),
+    num('parapet', 'Парапет', { min: 0, max: 1.5, step: 0.05, hint: 'Бортик по краю плоской крыши; 0 — без парапета', get: (r) => r.parapet ?? 0, visible: (r) => r.type === 'flat' }),
+    { ...check('gutters', 'Водостоки'), visible: (r) => r.type !== 'flat', bulk: true },
     num('w', 'Ширина (вдоль конька)', { min: 1, max: 60 }),
     num('d', 'Глубина', { min: 1, max: 60 }),
     rotation,
     posX,
     posY,
-    color('color', 'Цвет кровли'),
-    readonly('Высота конька', (r) => {
-      const t = Math.tan((r.pitch || 0) * DEG);
-      const rise = r.type === 'flat' ? 0.25 : r.type === 'shed' ? r.d * t : (Math.min(r.w, r.d) / 2) * t;
-      return `${rise.toFixed(2).replace('.', ',')} м`;
-    }),
+    color('color', 'Цвет кровли', { bulk: true }),
+    readonly('Высота конька', (r) => `${roofPeak(r).toFixed(2).replace('.', ',')} м`),
   ],
   zone: [
     select('material', 'Покрытие', Object.fromEntries(Object.entries(ZONE_MATERIALS).map(([k, m]) => [k, m.name]))),
@@ -349,8 +363,21 @@ export const LEVEL_SCHEMA = [
   { type: 'readonly', label: 'Отметка пола', get: (l, p) => `${fmtElev(levelElevation(p, l.id))} м` },
 ];
 
+/** Нижний этаж — подвал: фундаментом служат его стены и плита, вид фундамента не выбирают. */
+const onBasement = (p) => isBasement(p.levels[0]);
+
 export const PROJECT_SCHEMA = [
   { type: 'text', label: 'Название проекта', get: (p) => p.name, set: (p, v) => (p.name = v) },
-  num('foundation', 'Высота цоколя', { min: 0, max: 2, step: 0.05 }),
   select('facade', 'Отделка фасада', FACADE_FINISHES, { get: (p) => p.facade || 'plaster' }),
+  select('foundationType', 'Фундамент', FOUNDATION_NAMES, {
+    get: (p) => foundationOf(p).type,
+    hint: (p) => FOUNDATION_TYPES[foundationOf(p).type].hint,
+    visible: (p) => !onBasement(p),
+    rebuild: true,
+  }),
+  { type: 'readonly', label: 'Фундамент', get: () => 'стены и плита подвала', visible: onBasement },
+  num('foundation', 'Высота цоколя', { min: 0, max: 2.5, step: 0.05, hint: 'На сколько пол первого этажа выше земли' }),
+  select('plinthFinish', 'Отделка цоколя', PLINTH_NAMES, { get: (p) => foundationOf(p).finish }),
+  color('plinthColor', 'Цвет цоколя', { get: (p) => foundationOf(p).color, allowReset: true }),
+  num('blindArea', 'Отмостка', { min: 0, max: 2, step: 0.05, hint: 'Ширина бетонной полосы вокруг дома; 0 — без отмостки', get: (p) => foundationOf(p).blind }),
 ];

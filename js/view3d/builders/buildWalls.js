@@ -1,5 +1,5 @@
 /**
- * Стены этажа в 3D: куски между проёмами, перемычки, цоколь, крыльцо.
+ * Стены этажа в 3D: куски между проёмами, перемычки, крыльцо.
  * В мансарде стены срезаются скатами крыши — фронтоны и «колено» получаются сами.
  * Наружные стены подвала — бетонные, как цоколь.
  */
@@ -16,12 +16,13 @@ import { buildOpening } from './buildOpenings.js';
 import { splitWallFaces } from './wallFaces.js';
 import { wallSides } from '../../geometry/wallSides.js';
 import { wallType, wallSideFinish } from '../../model/wallTypes.js';
+import { foundationOf } from '../../model/foundation.js';
 
 /**
- * @param opts { plinth — цоколь под наружными стенами (нижний этаж над землёй),
- *               porch — крыльцо у наружных дверей (первый надземный этаж) }
+ * @param opts { porch — крыльцо у наружных дверей (первый надземный этаж) }
+ * Цоколь и фундамент под стенами — в buildFoundation.js.
  */
-export function buildWalls(project, levelId, base, { plinth = false, porch = false } = {}) {
+export function buildWalls(project, levelId, base, { porch = false } = {}) {
   const group = new THREE.Group();
   const level = getLevel(project, levelId);
   const walls = project.walls.filter((w) => w.levelId === levelId);
@@ -46,8 +47,9 @@ export function buildWalls(project, levelId, base, { plinth = false, porch = fal
 
   const sides = wallSides(project, levelId, geoms);
   const underground = isBasement(level);
-  const ctx = { facade: project.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: COLORS.plinth };
-  const plinthGeo = [];
+  // стены подвала снаружи отделаны как цоколь
+  const fnd = foundationOf(project);
+  const ctx = { facade: project.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: fnd.color, plinthFinish: fnd.finish };
   for (const g of geoms.values()) {
     const w = g.wall;
     const h = wallHeight(project, w);
@@ -81,15 +83,7 @@ export function buildWalls(project, levelId, base, { plinth = false, porch = fal
       const host = first || group.children[group.children.length - 1];
       if (host) host.userData.edgesFrom = piece(g.poly, base, base + h);
     }
-    if (plinth && w.kind === 'exterior' && base > 0.01) plinthGeo.push(extrudePolygon(g.poly, 0, base));
     for (const o of ops) group.add(buildOpening(g, o, base, h));
-  }
-  let pg = mergeGeometries(plinthGeo);
-  if (pg) {
-    if (TEX.on) pg = planarUV(pg);
-    const m = mesh(pg, mat(COLORS.plinth, { roughness: 0.95, map: 'stone' }));
-    m.userData.edges = true;
-    group.add(m);
   }
   // крыльцо у наружных дверей, если пол поднят на цоколь
   if (porch) {

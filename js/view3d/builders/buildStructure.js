@@ -1,17 +1,17 @@
-/** Перекрытия (полы комнат с проёмами под лестницы), лестницы и крыши. */
+/** Перекрытия (полы комнат с проёмами под лестницы) и лестницы. Крыши — в buildRoof.js. */
 import * as THREE from 'three';
 import { extrudePolygon, prism3D, mergeGeometries, mesh, cylinder, box, planarUV } from '../meshUtils.js';
 import { mat, TEX } from '../materials.js';
 import { FLOOR_TEXTURE } from '../textures.js';
 import { COLORS, FLOOR_MATERIALS, TREAD, stairStyle } from '../../model/defaults.js';
 import { stairLayout } from '../../geometry/stairGeometry.js';
-import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
-import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
+import { levelBelow, getLevel, levelWallHeight, isBasement } from '../../model/project.js';
 import { basementShapes } from '../../geometry/excavation.js';
 import { computeWallGeometry } from '../../geometry/wallGeometry.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, STRINGER_D, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
 import { railingMesh } from './railing.js';
+import { foundationOf } from '../../model/foundation.js';
 
 /** Подъём чистого пола над отметкой этажа в 3D — против мерцания совпадающих граней. */
 export const FLOOR_LIFT = 0.006;
@@ -30,7 +30,9 @@ export function buildFloors(project, level, base, index) {
     for (const s of project.stairs.filter((x) => x.levelId === below.id)) holes.push(stairLayout(s, stairRise3D(project, s)).outline);
   }
   // нижний этаж над землёй — пол на засыпке до земли; подвал — на бетонной плите
-  const y0 = index === 0 ? (base > 0.01 ? 0 : base - 0.1) : base - (below?.slab ?? 0.25);
+  // на сваях под домом просвет: пол первого этажа — плита, а не засыпка
+  const open = index === 0 && foundationOf(project).info.open && !isBasement(level);
+  const y0 = index === 0 ? (base > 0.01 ? (open ? Math.max(0, base - 0.25) : 0) : base - 0.1) : base - (below?.slab ?? 0.25);
   for (const room of project.rooms.filter((r) => r.levelId === level.id)) {
     const inner = holes.filter((h) => h.every((p) => pointInPolygon(p, room.points)));
     // чистый пол на несколько миллиметров выше верха стен этажа ниже и цоколя: иначе
@@ -213,52 +215,4 @@ function centroid(poly) {
     y += p.y;
   }
   return { x: x / poly.length, y: y / poly.length };
-}
-
-export function buildRoof(project, roof) {
-  const group = new THREE.Group();
-  const H = levelTop(project, roof.levelId);
-  const geo = roofGeometry(roof, H);
-  const ref = { kind: 'roof', id: roof.id };
-  const surf = [];
-  for (const s of geo.surfaces) {
-    if (s.flat) {
-      const pts = s.poly.map((p) => ({ x: p.x, y: p.z }));
-      surf.push(extrudePolygon(pts, H, H + s.thickness));
-    } else {
-      surf.push(prism3D(s.poly, { x: 0, y: -0.2, z: 0 }));
-    }
-  }
-  let sg = mergeGeometries(surf);
-  if (sg) {
-    const cover = roof.type === 'flat' ? 'concrete' : roof.cover || 'metal';
-    if (TEX.on && cover !== 'plain') sg = planarUV(sg);
-    const m = mesh(sg, mat(roof.color || COLORS.roof, { roughness: 0.75, map: cover === 'plain' ? null : cover }), ref);
-    m.userData.edges = true;
-    group.add(m);
-  }
-  const gab = [];
-  // у мансарды фронтоны — это её стены (срезанные скатами), отдельные треугольники не нужны
-  const gables = isAttic(getLevel(project, roof.levelId)) ? [] : geo.gables;
-  for (const poly of gables) {
-    const a = poly[0];
-    const b = poly[1];
-    const c = poly[2];
-    const u = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
-    const v = new THREE.Vector3(c.x - a.x, 0, c.z - a.z);
-    const n = u.cross(v).normalize();
-    const toCenter = new THREE.Vector3(roof.x - a.x, 0, roof.y - a.z);
-    if (n.dot(toCenter) < 0) n.negate();
-    n.multiplyScalar(0.3);
-    gab.push(prism3D(poly, { x: n.x, y: n.y, z: n.z }));
-  }
-  let gg = mergeGeometries(gab);
-  if (gg) {
-    if (TEX.on) gg = planarUV(gg);
-    const m = mesh(gg, mat(COLORS.facade, { map: project.facade || 'plaster' }), ref);
-    m.userData.edges = true;
-    group.add(m);
-  }
-  group.userData.ref = ref;
-  return group;
 }

@@ -58,6 +58,10 @@ export const ZONE_MATERIALS = {
 export const ROOF_TYPES = {
   gable: 'Двускатная',
   hip: 'Вальмовая',
+  halfhip: 'Полувальмовая',
+  pyramid: 'Шатровая',
+  mansard: 'Ломаная мансардная',
+  mansard4: 'Ломаная четырёхскатная',
   shed: 'Односкатная',
   flat: 'Плоская',
 };

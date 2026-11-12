@@ -5,13 +5,17 @@
  */
 import { computeWallGeometry, pointOnWall } from '../geometry/wallGeometry.js';
 import { levelFootprints, roomNetArea } from '../geometry/roomDetect.js';
-import { roofPlanes } from '../geometry/roofGeometry.js';
-import { roofSurfaceAt } from '../geometry/roofSurface.js';
+import { roofPlanes, roofOutline } from '../geometry/roofGeometry.js';
+import { roofGutters } from '../geometry/roofGutters.js';
+import { foundationParts, blindArea } from '../geometry/foundation.js';
+import { foundationOf, PLINTH_FINISHES } from './foundation.js';
+import { ROOF_COVERS, roofCover } from './finishes.js';
+import { roofSurfaceAt, chimneyTop } from '../geometry/roofSurface.js';
 import { roomWindowDirections } from '../geometry/orientation.js';
 import { polygonArea, bboxOf } from '../core/geometry.js';
 import { catalogItem, CATALOG } from './catalog.js';
 import { FLOOR_MATERIALS, ZONE_MATERIALS, STAIR_SHAPES, OPENING_STYLES } from './defaults.js';
-import { groundLevel, isAttic, isBasement, isRoofTerrace, levelElevation, levelTop, wallHeight } from './project.js';
+import { groundLevel, isAttic, isBasement, isRoofTerrace, levelElevation, levelTop, wallHeight, SITE_LEVEL } from './project.js';
 import { WALL_TYPES, WALL_FINISHES, wallType, wallTypeId, wallSideFinish, isBearing } from './wallTypes.js';
 import { wallSides } from '../geometry/wallSides.js';
 
@@ -32,6 +36,16 @@ export const PRICE_DEFAULTS = {
   excavation: 450,
   found_concrete: 5800,
   found_rebar: 80,
+  found_sand: 1300,
+  found_pile: 9500,
+  found_screw: 6500,
+  found_beam: 1400,
+  plinth_stone: 3200,
+  plinth_brick: 3000,
+  plinth_tile: 2200,
+  plinth_panels: 1800,
+  plinth_plaster: 900,
+  blind_area: 1500,
   wall_ext: 5200,
   wall_int: 5200,
   partition: 900,
@@ -64,6 +78,19 @@ export const PRICE_DEFAULTS = {
   floor_carpet: 750,
   floor_concrete: 350,
   roof_cover: 2100,
+  roof_tiles: 4200,
+  roof_shingle: 2300,
+  roof_seam: 2900,
+  roof_profsheet: 1700,
+  roof_slate: 1500,
+  roof_ondulin: 1600,
+  roof_membrane: 2400,
+  roof_sedum: 5200,
+  roof_plain: 1900,
+  gutter: 900,
+  downpipe: 950,
+  parapet: 2600,
+  chimney: 9000,
   roof_window: 38000,
   facade: 1600,
   facade_paint: 600,
@@ -145,11 +172,7 @@ export function roofCoverArea(project) {
   if (!roofs.length) return 0;
   const rps = roofs.map((r) => ({ r, rp: roofPlanes(r, levelTop(project, r.levelId)) }));
   const pts = [];
-  for (const r of roofs) {
-    const o = r.overhang ?? 0.5;
-    const R = Math.hypot(r.w / 2 + o, r.d / 2 + o);
-    pts.push({ x: r.x - R, y: r.y - R }, { x: r.x + R, y: r.y + R });
-  }
+  for (const r of roofs) pts.push(...roofOutline(r));
   const bb = bboxOf(pts);
   const step = 0.1;
   let area = 0;
@@ -303,18 +326,45 @@ export function computeEstimate(project) {
     row(fnd, 'excavation', 'Котлован под подвал', excav, 'м³');
     row(fnd, 'found_concrete', 'Бетон: стены подвала, лента, плита пола', concrete, 'м³');
   } else {
-    const plinth = project.foundation ?? 0.45;
-    for (const g of geomsByLevel.get(ground.id).values()) {
-      const w = g.wall;
-      if (!isBearing(w)) continue; // под перегородки — отдельная лента не нужна
-      const depth = plinth + 0.8;
-      concrete += g.len * (w.thickness + 0.1) * depth;
-      excav += g.len * (w.thickness + 0.5) * 0.9;
+    const f = foundationOf(project);
+    const parts = foundationParts(project);
+    const plinth = f.height;
+    const m = (v) => v.toFixed(2).replace('.', ',');
+    const bearing = [...geomsByLevel.get(ground.id).values()].filter((g) => isBearing(g.wall)); // под перегородки фундамент не нужен
+    if (f.type === 'slab') {
+      const fp = footprintArea(ground.id) * 1.08; // плита с выпуском за стены
+      excav += fp * 0.5;
+      concrete += fp * 0.3;
+      // цоколь над плитой — под наружными стенами
+      for (const g of bearing) if (g.wall.kind === 'exterior') concrete += g.len * g.wall.thickness * Math.max(0, plinth - 0.25);
+      row(fnd, 'excavation', 'Котлован под плиту', excav, 'м³');
+      row(fnd, 'found_sand', 'Песчано-гравийная подушка 30 см', fp * 0.3, 'м³');
+      row(fnd, 'found_concrete', `Бетон плиты 30 см и цоколя (${m(plinth)} м)`, concrete, 'м³');
+    } else if (f.type === 'piles') {
+      const n = parts.piles.length;
+      const depth = 2 + Math.max(0, plinth - 0.4); // до несущего грунта и над землёй до ростверка
+      for (const g of bearing) concrete += g.len * (g.wall.thickness + 0.1) * 0.4; // ростверк
+      row(fnd, 'found_pile', `Буронабивные сваи Ø300, длина ${m(depth)} м (бурение, каркас, бетон)`, n, 'шт');
+      row(fnd, 'found_concrete', 'Бетон ростверка 400 мм', concrete, 'м³');
+    } else if (f.type === 'screw') {
+      row(fnd, 'found_screw', 'Винтовые сваи Ø108 с оголовками', parts.piles.length, 'шт');
+      row(fnd, 'found_beam', 'Обвязка свай брусом 200×200', parts.bearingLength, 'м');
+    } else {
+      for (const g of bearing) {
+        concrete += g.len * (g.wall.thickness + 0.1) * (plinth + 0.8);
+        excav += g.len * (g.wall.thickness + 0.5) * 0.9;
+      }
+      row(fnd, 'excavation', 'Траншея под ленту', excav, 'м³');
+      row(fnd, 'found_concrete', `Бетон ленточного фундамента (с цоколем ${m(plinth)} м)`, concrete, 'м³');
     }
-    row(fnd, 'excavation', 'Траншея под ленту', excav, 'м³');
-    row(fnd, 'found_concrete', `Бетон ленточного фундамента (с цоколем ${plinth.toFixed(2).replace('.', ',')} м)`, concrete, 'м³');
   }
   row(fnd, 'found_rebar', `Арматура фундамента (≈${REBAR_KG_M3} кг на м³)`, concrete * REBAR_KG_M3, 'кг');
+  // отделка цоколя — по наружным стенам на высоту цоколя; бетон без отделки не считаем
+  const fo = foundationOf(project);
+  const perimeter = [...geomsByLevel.get(lowest.id).values()].filter((g) => g.wall.kind === 'exterior').reduce((sum, g) => sum + g.len, 0);
+  if (fo.finish !== 'concrete') row(fnd, `plinth_${fo.finish}`, `Отделка цоколя: ${PLINTH_FINISHES[fo.finish].name.toLowerCase()}`, perimeter * Math.max(0, fo.height), 'м²');
+  const blind = blindArea(project);
+  row(fnd, 'blind_area', `Отмостка шириной ${blind.width.toFixed(2).replace('.', ',')} м`, blind.area, 'м²');
 
   // ── Стены: по типам (из чего сложены) ──
   const wl = sec('Стены');
@@ -382,8 +432,30 @@ export function computeEstimate(project) {
 
   // ── Кровля ──
   const rf = sec('Кровля');
+  // площадь делим между покрытиями по доле каждой крыши (пересечения считаются один раз)
   const roofArea = roofCoverArea(project);
-  row(rf, 'roof_cover', 'Кровля: стропила, утеплитель, покрытие', roofArea, 'м²');
+  const own = project.roofs.map((r) => ({ r, a: roofCoverArea({ ...project, roofs: [r] }) }));
+  const ownSum = own.reduce((sum, x) => sum + x.a, 0) || 1;
+  const byCover = new Map();
+  for (const { r, a } of own) byCover.set(roofCover(r), (byCover.get(roofCover(r)) || 0) + (a / ownSum) * roofArea);
+  for (const [cover, area] of byCover) {
+    const name = ROOF_COVERS[cover].toLowerCase();
+    row(rf, cover === 'metal' ? 'roof_cover' : `roof_${cover}`, `Кровля: стропила, утеплитель, ${cover === 'plain' ? 'покрытие' : name}`, area, 'м²');
+  }
+  let gutterLen = 0;
+  let pipeLen = 0;
+  for (const r of project.roofs) {
+    const g = roofGutters(project, r);
+    gutterLen += g.length;
+    pipeLen += g.pipeLength;
+  }
+  row(rf, 'gutter', 'Водосточные желоба с креплением', gutterLen, 'м');
+  row(rf, 'downpipe', 'Водосточные трубы с коленами', pipeLen, 'м');
+  const parapet = project.roofs.filter((r) => r.type === 'flat' && r.parapet > 0.02).reduce((sum, r) => sum + 2 * (r.w + r.d + 4 * (r.overhang ?? 0.5)) * r.parapet, 0);
+  row(rf, 'parapet', 'Парапет плоской кровли', parapet, 'м²');
+  // дымоходы — по высоте от пола этажа до верха над кровлей
+  const chimneys = project.items.filter((it) => catalogItem(it.type)?.chimney && it.levelId !== SITE_LEVEL);
+  row(rf, 'chimney', `Дымоход кирпичный${chimneys.length > 1 ? ` (${chimneys.length} шт)` : ''}`, chimneys.reduce((sum, it) => sum + Math.max(0, chimneyTop(project, it) - levelElevation(project, it.levelId)), 0), 'м');
   const roofWins = project.items.filter((it) => catalogItem(it.type)?.roofMount).length;
   row(rf, 'roof_window', 'Мансардные окна', roofWins, 'шт');
 

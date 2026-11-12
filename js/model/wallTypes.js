@@ -102,7 +102,8 @@ export function finishOptions(outside) {
  * Отделка стороны стены.
  * @param side — 'A' | 'B'
  * @param ctx { outside — эта сторона смотрит на улицу, facade — отделка фасада проекта,
- *              underground — стена подвала в грунте, facadeColor, interiorColor, plinthColor }
+ *              underground — стена подвала в грунте (снаружи отделана как цоколь: plinthFinish, plinthColor),
+ *              facadeColor, interiorColor }
  * @returns {{ finish, color, tex, glass }}
  */
 export function wallSideFinish(w, side, ctx = {}) {
@@ -112,12 +113,14 @@ export function wallSideFinish(w, side, ctx = {}) {
   let finish;
   if (own && WALL_FINISHES[own]) finish = own;
   else if (t.glass) finish = t.in;
-  else if (ctx.underground && ctx.outside) finish = 'concrete';
+  else if (ctx.underground && ctx.outside) finish = WALL_FINISHES[ctx.plinthFinish] ? ctx.plinthFinish : 'concrete';
   else if (ctx.outside) finish = t.out || (WALL_FINISHES[ctx.facade] ? ctx.facade : 'plaster');
   else finish = t.in || 'plaster';
   const def = WALL_FINISHES[finish];
-  // цвет: свой цвет стороны → общий цвет стены (старое поле color) → цвет отделки → фасад / интерьер
-  const base = ctx.underground && ctx.outside ? ctx.plinthColor : ctx.outside ? ctx.facadeColor : ctx.interiorColor;
-  const color = ownColor || w.color || def.color || base || '#f1eee8';
+  // цвет: свой цвет стороны → общий цвет стены (старое поле color) → цвет цоколя (стена подвала
+  // снаружи) → цвет отделки → фасад / интерьер
+  const plinth = ctx.underground && ctx.outside ? ctx.plinthColor : null;
+  const base = ctx.outside ? ctx.facadeColor : ctx.interiorColor;
+  const color = ownColor || w.color || plinth || def.color || base || '#f1eee8';
   return { finish, color, tex: def.tex, glass: t.glass || 0 };
 }

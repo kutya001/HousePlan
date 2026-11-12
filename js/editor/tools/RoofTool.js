@@ -19,7 +19,7 @@ export class RoofTool extends Tool {
     this.hint = 'Протяните прямоугольник по наружным углам дома или нажмите «По контуру этажа». Крыша ложится на стены активного этажа.';
     this.settings = { type: 'gable', pitch: DEFAULTS.roof.pitch, overhang: DEFAULTS.roof.overhang };
     this.options = [
-      { key: 'type', label: 'Тип', type: 'segmented', options: ROOF_TYPES },
+      { key: 'type', label: 'Тип', type: 'select', options: ROOF_TYPES },
       { key: 'pitch', label: 'Уклон', type: 'number', min: 0, max: 60, step: 1, unit: '°' },
       { key: 'overhang', label: 'Свес', type: 'number', min: 0, max: 2, step: 0.05, unit: 'м' },
       { key: 'auto', label: 'По контуру этажа', type: 'button', action: () => this.auto() },
