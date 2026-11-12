@@ -14,6 +14,7 @@ import {
   simplifyPolygon,
   insetPolygon,
   polygonArea,
+  isSimplePolygon,
 } from '../core/geometry.js';
 
 const TOL = 0.015;
