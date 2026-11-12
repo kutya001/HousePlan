@@ -2,23 +2,24 @@
  * ИИ-помощник: что отправить Claude и как превратить ответ в проект.
  *
  * Каждый запрос несёт актуальный проект (JSON «houseplan-ai» с id элементов),
- * активный этаж, выделение и замечания проверки. Claude отвечает текстом
- * и/или вызывает один из инструментов:
+ * активный этаж, выделение, замечания проверки и — если задана — область задания
+ * (этаж, комната или выделенные объекты: менять можно только их, см. scope.js).
+ * Claude отвечает текстом и/или вызывает один из инструментов:
  *   edit_project  — список правок JSON Patch к присланному JSON (точечные правки);
  *   build_project — проект целиком (новый дом или большая переделка).
  * Результат проходит тот же импорт, что и «Импорт ответа ИИ»: починка стыков,
- * проверка проёмов, нормализация. Если правки не применились — ошибка уходит
- * обратно Claude (tool_result), и он исправляется сам (до двух раз).
- * Модуль без DOM — его проверяют юнит-тесты.
+ * проверка проёмов, нормализация. Сам разговор — по шагам, с возвратом ошибок
+ * Claude на исправление — ведёт agent.js. Модуль без DOM — его проверяют юнит-тесты.
  */
 import { formatRules, EXAMPLE } from '../io/aiPrompt.js';
 import { toExchange, importProject, extractJson, summarize } from '../io/exchange.js';
 import { applyPatch } from './jsonPatch.js';
-import { streamMessage, ApiError } from './claudeClient.js';
+import { buildScope, scopeText, trimToScope } from './scope.js';
 import { SITE_LEVEL, getLevel } from '../model/project.js';
 
-// размышление модели тоже расходует этот лимит — берём с запасом
-export const MAX_TOKENS = 64000;
+// Предел длины одного ответа. Размышление модели тоже расходует его — берём наибольший;
+// если модель принимает меньше, agent.js возьмёт её предел из ответа API.
+export const MAX_TOKENS = 128000;
 const HISTORY_TURNS = 12;
 
 export const TOOLS = [
@@ -80,6 +81,24 @@ export function buildSystem() {
 - После применения программа сама проверит проект и покажет замечания. Просят исправить замечания — исправь их через edit_project, не ломая остального.
 - Пиши размеры так, как их поймёт человек: «гостиная 5×6 м», а не координатами.
 
+РАБОТА ПО ШАГАМ
+- Инструменты можно вызывать несколько раз подряд: после каждого вызова программа применяет шаг к проекту и присылает обновлённый JSON — следующие правки относятся к нему. Так большая работа не упирается в предел длины одного ответа.
+- Маленькую правку делай одним вызовом, не дроби зря. Большую задачу (новый дом в несколько этажей, дом сразу с мебелью, переделка нескольких этажей, «расставь мебель везде») дели на шаги сам, не спрашивая пользователя:
+  1) каркас — build_project (новый дом) или edit_project: участок, этажи, наружные и внутренние стены, комнаты, лестницы, крыша;
+  2) окна и двери — edit_project (в большом доме — по этажам);
+  3) мебель, сантехника, свет и розетки — edit_project по одному этажу или по несколько комнат за шаг;
+  4) участок: дорожки, покрытия, постройки и объекты.
+- Один вызов — не больше примерно 60 правок или 150 элементов. Если не уверен, что поместится, — раздели.
+- Перед первым шагом большой задачи напиши короткий план (2–5 пунктов). Перед каждым следующим вызовом — одна строка, что делаешь сейчас.
+- id элементов между шагами сохраняются; новые элементы без id получают его от программы — смотри в присланном JSON.
+- Когда задача выполнена целиком — ответь коротким итогом без инструмента: что построено или изменено и на что обратить внимание. Не повторяй шаги, которые уже применены.
+- Если программа сообщила, что ответ оборвался из-за длины, — повтори шаг меньшей порцией.
+
+ОБЛАСТЬ ЗАДАНИЯ
+- Если в сообщении есть раздел «ОБЛАСТЬ ЗАДАНИЯ», пользователь выделил этаж, комнату или объекты и просит работать только с ними. Меняй, добавляй и удаляй только то, что разрешено в этом разделе; всё остальное оставь как есть — программа отклонит правку, которая выходит за область.
+- «Здесь», «тут», «это», «эту комнату» в таком запросе — про область задания.
+- Этажи вне области показаны сокращённо (только стены и лестницы) — этого достаточно, чтобы учитывать, что над и под областью.
+
 ПРАВКИ (edit_project)
 - patch — JSON Patch к присланному JSON: { "op": "add" | "remove" | "replace" | "move" | "copy", "path": "...", "value": … }.
 - path — JSON Pointer. Элементы списков адресуй по их id из присланного JSON: стены w1…, проёмы o1…, комнаты r1…, лестницы s1…, мебель f1…, крыши k1…, объекты участка g1…, зоны z1… Этажи — по номеру в levels (0 — самый нижний). Примеры: "/levels/0/rooms/r3/floor", "/levels/1/furniture/f12", "/site/boundary".
@@ -112,15 +131,20 @@ export function issuesText(project, issues, limit = 20) {
 }
 
 /**
- * Снимок проекта для запроса: JSON с id и подписи активного этажа и выделения.
- * @returns {{ exchange, json, context }}
+ * Снимок проекта для запроса: JSON с id и подписи активного этажа, выделения и области задания.
+ * @param opts.scope — цель области: { levelId } или { selection } (см. scope.js); без неё — весь проект
+ * @returns {{ exchange, json, context, empty, scope }} exchange — полный JSON (к нему относятся правки),
+ *          json — то, что отправлено Claude (при области этажи вне её сокращены), scope — область или null
  */
-export function snapshotProject(project, { activeLevelId = null, selection = [], issues = [] } = {}) {
+export function snapshotProject(project, { activeLevelId = null, selection = [], issues = [], scope: target = null } = {}) {
   const idMap = new Map();
   const exchange = toExchange(project, { ids: true, idMap });
-  const json = JSON.stringify(exchange);
   const empty = !project.walls.length;
+  const scope = target && !empty ? buildScope(project, target, idMap) : null;
+  const json = JSON.stringify(scope ? trimToScope(exchange, scope) : exchange);
   const li = project.levels.findIndex((l) => l.id === activeLevelId);
+  // замечания проверки — только по этажам области: остальное Claude всё равно не может править
+  const inScope = (i) => (i.levelId === SITE_LEVEL ? 'site' : project.levels.findIndex((l) => l.id === i.levelId)) in scope.parts;
   const sel = selection
     .map((s) => {
       const ref = idMap.get(s.id);
@@ -131,13 +155,14 @@ export function snapshotProject(project, { activeLevelId = null, selection = [],
     .filter(Boolean);
   const context = [
     empty ? 'ТЕКУЩИЙ ПРОЕКТ: пуст — стен нет. Чтобы построить дом, вызови build_project.' : `ТЕКУЩИЙ ПРОЕКТ (формат houseplan-ai, с id элементов для правок):\n${json}`,
+    scope ? scopeText(scope, exchange) : '',
     li >= 0 && !empty ? `АКТИВНЫЙ ЭТАЖ: levels/${li} «${project.levels[li].name}»` : '',
-    sel.length ? `ВЫДЕЛЕНО НА ПЛАНЕ: ${sel.join(', ')}` : '',
-    empty ? '' : `ПРОВЕРКА ПРОЕКТА:\n${issuesText(project, issues)}`,
+    sel.length && !scope ? `ВЫДЕЛЕНО НА ПЛАНЕ: ${sel.join(', ')}` : '',
+    empty ? '' : `ПРОВЕРКА ПРОЕКТА${scope ? ' (в области задания)' : ''}:\n${issuesText(project, scope ? issues.filter(inScope) : issues)}`,
   ]
     .filter(Boolean)
     .join('\n\n');
-  return { exchange, json, context, empty };
+  return { exchange, json, context, empty, scope };
 }
 
 /**
@@ -155,7 +180,7 @@ export function buildMessages({ history = [], text, images = [], context }) {
     else msgs.push({ role, content: [{ type: 'text', text: t }] });
   };
   for (const m of history.slice(-HISTORY_TURNS * 2)) {
-    if (m.role === 'user') push('user', `${m.text}${m.images ? '\n[было приложено изображение]' : ''}`);
+    if (m.role === 'user') push('user', `${m.text}${m.scope ? `\n[запрос был по области: ${m.scope}]` : ''}${m.images ? '\n[было приложено изображение]' : ''}`);
     else push('assistant', [m.text, m.applied ? `[Применено к проекту: ${m.applied}]` : '', m.error ? `[Не применилось: ${m.error}]` : ''].filter(Boolean).join('\n'));
   }
   while (msgs.length && msgs[0].role !== 'user') msgs.shift();
@@ -186,10 +211,12 @@ function asJson(v, what) {
 /**
  * Вызов инструмента → новый проект.
  * @param tool { name, input }
- * @param baseExchange — JSON, который видел Claude (к нему относятся правки)
- * @returns {{ project|null, warnings, summary, changes }} project = null — правок нет
+ * @param baseExchange — JSON, к которому относятся правки (последний присланный Claude)
+ * @param check — (before, after) → бросает ошибку, если правка недопустима (выход за область задания)
+ * @returns {{ project|null, warnings, summary, changes, sourceIds }} project = null — правок нет;
+ *          sourceIds — id элементов в JSON (чтобы следующий шаг видел их под теми же id)
  */
-export function projectFromTool(tool, baseExchange) {
+export function projectFromTool(tool, baseExchange, check = null) {
   const input = tool.input || {};
   const summary = String(input.summary || '').trim();
   let data;
@@ -197,18 +224,19 @@ export function projectFromTool(tool, baseExchange) {
   if (tool.name === 'edit_project') {
     const patch = asJson(input.patch, 'patch');
     if (!Array.isArray(patch)) throw new Error('patch должен быть списком правок');
-    if (!patch.length) return { project: null, warnings: [], summary, changes: 0 };
+    if (!patch.length) return { project: null, warnings: [], summary, changes: 0, sourceIds: null };
     data = applyPatch(baseExchange, patch);
     changes = patch.length;
+    check?.(baseExchange, data);
   } else if (tool.name === 'build_project') {
     data = asJson(input.project, 'project');
     if (!data || typeof data !== 'object') throw new Error('project должен быть объектом');
     if (!data.format) data = { format: 'houseplan-ai', version: 1, units: 'm', ...data };
   } else throw new Error(`неизвестный инструмент ${tool.name}`);
-  const { project, warnings } = importProject(data);
+  const { project, warnings, sourceIds = null } = importProject(data);
   const s = summarize(project);
   if (!s.levels.some((l) => l.walls)) throw new Error('в результате нет ни одной стены');
-  return { project, warnings, summary, changes };
+  return { project, warnings, summary, changes, sourceIds };
 }
 
 /**
@@ -226,13 +254,6 @@ export function carryOver(prev, next) {
     if (lvl || sp.levelId === SITE_LEVEL) next.site.spawn = { ...sp, levelId: lvl ? lvl.id : sp.levelId };
   }
   return next;
-}
-
-function addUsage(total, u = {}) {
-  total.input += u.input_tokens || 0;
-  total.output += u.output_tokens || 0;
-  total.cacheRead += u.cache_read_input_tokens || 0;
-  total.cacheWrite += u.cache_creation_input_tokens || 0;
 }
 
 /**
@@ -253,101 +274,3 @@ export function replayBlocks(content) {
 
 /** Усилие модели: меньше — быстрее и дешевле, больше — тщательнее (output_config.effort). */
 export const EFFORTS = { low: 'Быстро', medium: 'Обычно', high: 'Тщательно' };
-
-const STOP_TEXT = {
-  refusal: 'Claude отказался выполнять этот запрос. Переформулируйте его или выберите другую модель в настройках ИИ.',
-  model_context_window_exceeded: 'Разговор и проект не помещаются в память модели — начните новый разговор («+» вверху вкладки).',
-};
-
-/**
- * Один ход разговора: запрос → (инструмент → проект) с автоповтором при ошибке правок.
- * @param opts { key, workspace, model, effort, history, text, images, snapshot, signal, onProgress, fetchImpl, maxRetries, retryDelays }
- * @returns {{ text, project?, warnings?, summary?, tool?, changes?, usage, attempts }}
- */
-export async function runTurn({ key, workspace = '', model, effort = '', history = [], text, images = [], snapshot, signal, onProgress, fetchImpl, maxRetries = 2, retryDelays }) {
-  const system = buildSystem();
-  const messages = buildMessages({ history, text, images, context: snapshot.context });
-  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  const texts = [];
-  let maxTokens = MAX_TOKENS;
-  let useEffort = !!EFFORTS[effort];
-  const send = () =>
-    streamMessage({
-      key,
-      workspace,
-      body: { model, max_tokens: maxTokens, system, tools: TOOLS, messages, ...(useEffort ? { output_config: { effort } } : {}) },
-      signal,
-      onProgress,
-      fetchImpl,
-      retryDelays,
-    });
-  // Запрос, который модель не принимает из-за необязательных параметров, повторяем без них:
-  // у старых моделей меньше предел ответа и нет настройки усилия.
-  const request = async () => {
-    for (let fix = 0; ; fix++) {
-      try {
-        return await send();
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.status !== 400 || fix >= 2) throw err;
-        if (/max_tokens/i.test(err.message) && maxTokens > 8192) {
-          // «max_tokens: 64000 > 16384, which is the maximum…» — берём предел модели из текста ошибки
-          const limits = (err.message.match(/\d{4,6}/g) || []).map(Number).filter((n) => n < maxTokens);
-          maxTokens = Math.max(4096, limits.length ? Math.min(...limits) : 8192);
-        } else if (useEffort && /effort|output_config/i.test(err.message)) {
-          useEffort = false;
-        } else throw err;
-      }
-    }
-  };
-  for (let attempt = 0; ; attempt++) {
-    const msg = await request();
-    addUsage(usage, msg.usage);
-    const reply = msg.content
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text)
-      .join('')
-      .trim();
-    if (reply) texts.push(reply);
-    const tools = msg.content.filter((b) => b.type === 'tool_use');
-    const tool = tools[0];
-    const cut = msg.stop_reason === 'max_tokens';
-    if (!tool) {
-      const stopped = STOP_TEXT[msg.stop_reason];
-      if (stopped || (cut && !reply)) {
-        const e = new Error(stopped || 'Ответ не поместился в лимит — попросите сделать по частям (например, сначала первый этаж).');
-        e.usage = usage;
-        e.text = texts.join('\n\n');
-        throw e;
-      }
-      return { text: texts.join('\n\n'), usage, attempts: attempt + 1 };
-    }
-    let error;
-    try {
-      if (tool.inputError) throw new Error(cut ? 'проект не поместился в один ответ — JSON оборван' : tool.inputError);
-      const res = projectFromTool(tool, snapshot.exchange);
-      return { text: texts.join('\n\n'), usage, attempts: attempt + 1, tool: tool.name, ...res };
-    } catch (err) {
-      error = err;
-    }
-    if (attempt >= maxRetries || cut) {
-      const e = new Error(cut ? 'Ответ не поместился в лимит — попросите сделать по частям (например, сначала первый этаж) или правками.' : `Правки не применились: ${error.message}`);
-      e.usage = usage;
-      e.text = texts.join('\n\n');
-      throw e;
-    }
-    onProgress?.({ type: 'retry', attempt: attempt + 1, error: error.message });
-    // продолжение того же хода: ответ модели целиком (с размышлениями) + только tool_result
-    messages.push(
-      { role: 'assistant', content: replayBlocks(msg.content) },
-      {
-        role: 'user',
-        content: tools.map((t, i) => ({
-          type: 'tool_result',
-          tool_use_id: t.id,
-          is_error: true,
-          content: i === 0 ? `Не получилось применить: ${error.message}. Исправь и вызови инструмент снова (правки — к тому же JSON, что был прислан).` : 'Пропущено: вызывай один инструмент за ответ.',
-        })),
-      },
-    );
-  }
-}

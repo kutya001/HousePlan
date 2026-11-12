@@ -1,7 +1,7 @@
 /**
  * Пункты контекстного меню для объекта под курсором (ПКМ или долгое нажатие).
  */
-import { getEntity, KIND_LABEL, openingsOfWall } from '../model/project.js';
+import { getEntity, KIND_LABEL, openingsOfWall, SITE_LEVEL } from '../model/project.js';
 import { catalogItem } from '../model/catalog.js';
 import { OPENING_KINDS } from '../model/defaults.js';
 import { addOpeningAt, splitWall } from '../model/operations.js';
@@ -21,8 +21,26 @@ export function contextTitle(app, ref) {
   return KIND_LABEL[ref.kind] || 'Объект';
 }
 
+const AI_WHAT = { room: 'по этой комнате', wall: 'по этой стене', opening: 'по этому проёму', item: 'по этому предмету', stair: 'по этой лестнице', roof: 'по этой крыше', zone: 'по этой зоне', site: 'по участку' };
+
+/**
+ * «Запрос ИИ…»: открыть помощника с областью задания — он изменит только её.
+ * Область — всё выделенное (объект под курсором входит в него), на пустом месте — активный этаж.
+ */
+export function aiItem(app, hit) {
+  const ask = (target) => () => app.ui.side.ai.ask(target);
+  if (!app.project.walls.length) return { label: 'Запрос ИИ: построить дом…', icon: 'spark', onClick: ask(null) };
+  if (!hit) return { label: `Запрос ИИ по этажу «${app.state.level.name}»…`, icon: 'spark', onClick: ask({ levelId: app.state.activeLevelId }) };
+  if (hit.kind === 'site') return { label: 'Запрос ИИ по участку…', icon: 'spark', onClick: ask({ levelId: SITE_LEVEL }) };
+  const sel = app.state.selection.filter((s) => s.kind !== 'site');
+  const many = sel.length > 1 && sel.some((s) => s.kind === hit.kind && s.id === hit.id);
+  const target = { selection: (many ? sel : [hit]).map((s) => ({ kind: s.kind, id: s.id })) };
+  return { label: many ? `Запрос ИИ по выделенному (${sel.length})…` : `Запрос ИИ ${AI_WHAT[hit.kind] || 'по этому объекту'}…`, icon: 'spark', onClick: ask(target) };
+}
+
 export function buildContextItems(app, { hit, world }) {
   const c = app.commands;
+  const ai = aiItem(app, hit);
   const props = { label: 'Свойства', icon: 'panel', onClick: () => app.bus.emit('properties:focus', hit) };
   const del = { label: 'Удалить', icon: 'trash', kbd: 'Del', danger: true, onClick: () => c.deleteSelection() };
   const dup = { label: 'Дублировать', icon: 'copy', kbd: 'Ctrl+D', onClick: () => c.duplicate() };
@@ -38,6 +56,7 @@ export function buildContextItems(app, { hit, world }) {
       { label: 'Выделить всё на этаже', icon: 'select', kbd: 'Ctrl+A', onClick: () => c.selectAll() },
       app.state.coarse ? { label: 'Выделить рамкой', icon: 'room', onClick: () => sel.armMarquee() } : null,
       sep,
+      ai,
       { label: 'Показать весь дом', icon: 'fit', kbd: 'Home', onClick: () => app.editor.fitToContent() },
       { label: 'Новая стена отсюда', icon: 'wall', onClick: () => app.editor.setTool('wall') },
       walkHere,
@@ -73,6 +92,7 @@ export function buildContextItems(app, { hit, world }) {
       };
       return [
         props,
+        ai,
         sep,
         { label: 'Дверь здесь', icon: 'door', onClick: place('door') },
         { label: 'Окно здесь', icon: 'window', onClick: place('window') },
@@ -97,6 +117,7 @@ export function buildContextItems(app, { hit, world }) {
     case 'opening':
       return [
         props,
+        ai,
         sep,
         { label: 'Открывание на другую сторону', icon: 'flip', kbd: 'X', onClick: () => c.flipOpening(false) },
         { label: 'Петли с другой стороны', icon: 'flip', kbd: 'Shift+X', onClick: () => c.flipOpening(true) },
@@ -106,10 +127,11 @@ export function buildContextItems(app, { hit, world }) {
     case 'item':
     case 'stair':
     case 'roof':
-      return [props, sep, dup, rot, { label: 'Повернуть на 15°', icon: 'rotate', kbd: 'E', onClick: () => c.rotateSelection(15) }, sep, del];
+      return [props, ai, sep, dup, rot, { label: 'Повернуть на 15°', icon: 'rotate', kbd: 'E', onClick: () => c.rotateSelection(15) }, sep, del];
     case 'room':
       return [
         { ...props, label: 'Переименовать и пол' },
+        ai,
         { ...walkHere, label: 'Пройтись здесь манекеном' },
         spawnHere,
         sep,
@@ -120,10 +142,10 @@ export function buildContextItems(app, { hit, world }) {
         { ...del, label: 'Удалить пол комнаты' },
       ];
     case 'zone':
-      return [props, walkHere, spawnHere, sep, dup, del];
+      return [props, ai, walkHere, spawnHere, sep, dup, del];
     case 'site':
-      return [{ ...props, label: 'Участок и забор' }, { label: 'Размер участка…', icon: 'site', onClick: () => app.ui.presets.open('site') }, walkHere, spawnHere];
+      return [{ ...props, label: 'Участок и забор' }, { label: 'Размер участка…', icon: 'site', onClick: () => app.ui.presets.open('site') }, ai, walkHere, spawnHere];
     default:
-      return [props, del];
+      return [props, ai, del];
   }
 }

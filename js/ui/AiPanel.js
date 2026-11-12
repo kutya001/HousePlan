@@ -1,16 +1,22 @@
 /**
  * Вкладка «ИИ»: разговор с Claude прямо в программе.
  * Пишете запрос («дом 10×12 с котельной», «сделай кухню больше», «добавь террасу»)
- * или прикладываете фото эскиза — Claude строит или правит проект, программа
- * проверяет результат и применяет его одним шагом истории (Ctrl+Z вернёт как было).
+ * или прикладываете фото эскиза — Claude строит или правит проект. Большую задачу он
+ * делит на шаги сам: каждый шаг сразу виден на плане, а весь ответ отменяется одним
+ * Ctrl+Z. Запрос можно дать по области — этажу, комнате или выделенным объектам:
+ * тогда меняется только она (правый клик на плане → «Запрос ИИ…»).
  */
 import { h, icon, clear } from './dom.js';
+import { openMenu } from './ContextMenu.js';
 import { openAiSettings } from './AiKeyDialog.js';
 import { getKey, getModel, getModels, getEffort, getWorkspace, loadChat, saveChat } from '../ai/aiStore.js';
 import { describeError } from '../ai/claudeClient.js';
-import { runTurn, snapshotProject, carryOver } from '../ai/assistant.js';
+import { snapshotProject, carryOver } from '../ai/assistant.js';
+import { runTurn } from '../ai/agent.js';
+import { describeTarget } from '../ai/scope.js';
 import { summarizeIssues, plural } from '../model/validate.js';
 import { summarize } from '../io/exchange.js';
+import { SITE_LEVEL } from '../model/project.js';
 
 const MAX_IMAGES = 3;
 const MAX_SIDE = 1568; // больше API всё равно уменьшит
@@ -21,6 +27,8 @@ const START_EMPTY = [
   'Дом 8×10 с мансардой: внизу гостиная, кухня, санузел; в мансарде две спальни',
   'Баня 6×4: комната отдыха, моечная, парная',
 ];
+/** Подсказки для запроса по области. */
+const START_SCOPE = ['Расставь здесь мебель', 'Добавь свет, розетки и выключатели', 'Поменяй отделку и пол', 'Что здесь можно улучшить?'];
 const START_EDIT = [
   'Расставь мебель во всех комнатах',
   'Исправь замечания проверки',
@@ -109,12 +117,14 @@ export class AiPanel {
     this.images = [];
     this.busy = null;
     this.rev = 0;
+    this.scope = null; // { target, label } — область задания следующего запроса
     this._build();
     this.render();
     app.bus.on('project:changed', ({ reason }) => {
       if (reason === 'gesture') return;
       this.rev++;
       this._syncUndo();
+      this._syncScope();
       if (!this.chat.length) this.render(); // подсказки зависят от того, пуст ли план
     });
   }
@@ -150,13 +160,16 @@ export class AiPanel {
     });
     this.fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: () => this.addImages([...this.fileInput.files]) });
     this.attachBtn = h('button', { class: 'icon-btn', 'aria-label': 'Приложить фото или эскиз', 'data-tip': 'Фото или эскиз плана', onclick: () => this.fileInput.click() }, icon('clip', 18));
+    this.scopeBtn = h('button', { class: 'icon-btn ai-scope-btn', 'aria-label': 'Область задания', 'aria-haspopup': 'menu', 'data-tip': 'Область задания: весь проект, этаж, комната или выделенное', onclick: () => this._scopeMenu() }, icon('scope', 18));
+    this.scopeBar = h('div', { class: 'ai-scope', hidden: true });
     this.sendBtn = h('button', { class: 'ai-send', 'aria-label': 'Отправить', onclick: () => (this.busy ? this.stop() : this.send()) }, icon('send', 18));
     const composer = h(
       'div',
       { class: 'ai-composer' },
+      this.scopeBar,
       this.thumbs,
       this.input,
-      h('div', { class: 'ai-composer-row' }, this.attachBtn, this.fileInput, h('span', { class: 'ai-hint muted' }, app.state.coarse ? '' : 'Enter — отправить, Shift+Enter — новая строка'), this.sendBtn),
+      h('div', { class: 'ai-composer-row' }, this.attachBtn, this.scopeBtn, this.fileInput, h('span', { class: 'ai-hint muted' }, app.state.coarse ? '' : 'Enter — отправить, Shift+Enter — новая строка'), this.sendBtn),
     );
     this.root.classList.add('ai-body');
     this.root.append(head, this.log, composer);
@@ -223,15 +236,24 @@ export class AiPanel {
 
   _intro() {
     const empty = !this.app.project.walls.length;
+    const scoped = !empty && this.scope;
     return h(
       'div',
       { class: 'ai-card' },
-      h('h3', {}, icon('spark', 18), empty ? 'Какой дом построить?' : 'Что изменить в проекте?'),
-      h('p', { class: 'muted small' }, empty ? 'Опишите дом: размеры, этажи, комнаты, крышу, участок. Или приложите фото эскиза плана.' : 'Claude видит весь проект, активный этаж, выделенное на плане и замечания проверки. Любой ответ можно отменить — Ctrl+Z.'),
+      h('h3', {}, icon('spark', 18), empty ? 'Какой дом построить?' : scoped ? `Что сделать: ${this.scope.label}?` : 'Что изменить в проекте?'),
+      h(
+        'p',
+        { class: 'muted small' },
+        empty
+          ? 'Опишите дом: размеры, этажи, комнаты, крышу, участок. Или приложите фото эскиза плана. Большой дом Claude строит по шагам — каркас, окна и двери, мебель.'
+          : scoped
+            ? 'Claude изменит только эту область — остальной проект останется как есть. Снять область — крестик над полем запроса.'
+            : 'Claude видит весь проект, активный этаж, выделенное на плане и замечания проверки. Чтобы менялась только часть дома, выделите её и нажмите правой кнопкой → «Запрос ИИ…». Любой ответ можно отменить — Ctrl+Z.',
+      ),
       h(
         'div',
         { class: 'ai-suggest' },
-        (empty ? START_EMPTY : START_EDIT).map((t) =>
+        (empty ? START_EMPTY : scoped ? START_SCOPE : START_EDIT).map((t) =>
           h(
             'button',
             {
@@ -251,18 +273,30 @@ export class AiPanel {
 
   _bubble(m, isLast) {
     if (m.role === 'user') {
-      return h('div', { class: 'ai-msg user' }, h('div', { class: 'ai-text' }, richText(m.text)), m.images ? h('div', { class: 'ai-meta' }, icon('image', 14), `фото: ${m.images}`) : null);
+      return h(
+        'div',
+        { class: 'ai-msg user' },
+        h('div', { class: 'ai-text' }, richText(m.text)),
+        m.scope ? h('div', { class: 'ai-meta' }, icon('scope', 14), `Область: ${m.scope}`) : null,
+        m.images ? h('div', { class: 'ai-meta' }, icon('image', 14), `фото: ${m.images}`) : null,
+      );
     }
     const text = h('div', { class: 'ai-text' }, m.text ? richText(m.text) : null);
     const status = h('div', { class: 'ai-status', hidden: !m.pending }, h('span', { class: 'ai-dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')), h('span', {}, m.status || 'Думаю…'));
-    const parts = [text, status];
-    if (m.applied) {
+    const parts = [text];
+    const steps = m.steps || [];
+    // шаги, применённые по ходу ответа: видны сразу, пока Claude работает дальше
+    if (m.pending && steps.length) parts.push(h('ol', { class: 'ai-steps live' }, steps.map((t) => h('li', {}, icon('check', 14), h('span', {}, t)))));
+    parts.push(status);
+    if (m.applied && !m.pending) {
+      const many = steps.length > 1;
+      const title = m.undone ? 'Отменено' : `${m.kind === 'build' ? 'Проект построен' : 'Применено'}${many ? ` · ${steps.length} ${plural(steps.length, 'шаг', 'шага', 'шагов')}` : ''}`;
       parts.push(
         h(
           'div',
           { class: `ai-result ${m.undone ? 'undone' : ''}` },
-          h('div', { class: 'ai-result-title' }, icon(m.undone ? 'undo' : 'check', 16), m.undone ? 'Отменено' : m.kind === 'build' ? 'Проект построен' : 'Применено'),
-          h('div', {}, m.applied),
+          h('div', { class: 'ai-result-title' }, icon(m.undone ? 'undo' : 'check', 16), title),
+          many ? h('ol', { class: 'ai-steps' }, steps.map((t) => h('li', {}, h('span', {}, t)))) : h('div', {}, m.applied),
           m.stats ? h('div', { class: 'ai-meta' }, m.stats) : null,
           m.issues ? h('div', { class: `ai-meta ${m.issueErrors ? 'bad' : 'meh'}` }, icon('warn', 14), `Проверка: ${m.issues}`) : h('div', { class: 'ai-meta ok' }, icon('shield', 14), 'Проверка: ошибок нет'),
         ),
@@ -292,6 +326,9 @@ export class AiPanel {
     if (isLast && m.applied && !m.undone && m.issueCount) {
       actions.append(h('button', { class: 'btn btn-small', onclick: () => this.send('Исправь замечания проверки, ничего другого не меняй.') }, icon('wand', 14), 'Исправить замечания'));
     }
+    if (isLast && m.more) {
+      actions.append(h('button', { class: 'btn btn-small', onclick: () => this.send('Продолжай.') }, icon('run', 14), 'Продолжить'));
+    }
     if (isLast && m.fixKey) {
       actions.append(h('button', { class: 'btn btn-small', onclick: () => this.settings() }, icon('key', 14), 'Ключ и модель…'));
     }
@@ -316,6 +353,80 @@ export class AiPanel {
     this.sendBtn.classList.toggle('stop', busy);
     this.sendBtn.setAttribute('aria-label', busy ? 'Остановить' : 'Отправить');
     this.attachBtn.disabled = busy;
+    this.scopeBtn.disabled = busy;
+  }
+
+  // ── Область задания ──
+
+  /**
+   * Задать область следующего запроса.
+   * @param target { levelId } — этаж (SITE_LEVEL — участок), { selection: [{ kind, id }] } — объекты; null — весь проект
+   */
+  setScope(target) {
+    const label = target ? describeTarget(this.app.project, target) : null;
+    this.scope = label ? { target, label } : null;
+    this._renderScope();
+    if (!this.chat.length && !this.busy) this.render();
+  }
+
+  /** Открыть вкладку с запросом по области: «Запрос ИИ…» из меню плана, панели выделения и свойств. */
+  ask(target, text = '') {
+    if (!this.app.project.walls.length) target = null; // в пустом проекте области нет — строим дом
+    this.setScope(target);
+    this.focus(text, { force: true });
+  }
+
+  /** Область для того, что сейчас выделено на плане (или активного этажа, если ничего не выделено). */
+  currentTarget() {
+    const { selection, activeLevelId } = this.app.state;
+    return selection.length ? { selection: selection.map((s) => ({ kind: s.kind, id: s.id })) } : { levelId: activeLevelId };
+  }
+
+  /** Проект изменился: область могла исчезнуть (удалили комнату, этаж) или переименоваться. */
+  _syncScope() {
+    if (!this.scope) return;
+    const label = describeTarget(this.app.project, this.scope.target);
+    if (label === this.scope.label) return;
+    this.scope = label ? { target: this.scope.target, label } : null;
+    this._renderScope();
+  }
+
+  _renderScope() {
+    const bar = clear(this.scopeBar);
+    bar.hidden = !this.scope;
+    this.scopeBtn.classList.toggle('active', !!this.scope);
+    this.input.placeholder = this.scope ? 'Что сделать в этой области…' : 'Опишите дом или что изменить…';
+    if (!this.scope) return;
+    bar.append(
+      icon('scope', 16),
+      h('span', { class: 'ai-scope-label', 'data-tip': 'Claude изменит только эту область' }, 'Только: ', h('strong', {}, this.scope.label)),
+      h('button', { class: 'ai-scope-x', 'aria-label': 'Снять область — работать со всем проектом', 'data-tip': 'Работать со всем проектом', onclick: () => this.setScope(null) }, icon('close', 14)),
+    );
+  }
+
+  _scopeMenu() {
+    const { app } = this;
+    const sel = app.state.selection;
+    const selTarget = sel.length ? { selection: sel.map((s) => ({ kind: s.kind, id: s.id })) } : null;
+    const selLabel = selTarget && describeTarget(app.project, selTarget);
+    const lvl = app.state.level;
+    const empty = !app.project.walls.length;
+    const pick = (target) => () => {
+      this.setScope(target);
+      this.input.focus();
+    };
+    openMenu(app, {
+      anchor: this.scopeBtn,
+      title: 'С чем работать Claude',
+      sheet: app.state.isPhone,
+      items: [
+        { label: 'Весь проект', icon: 'home', active: !this.scope, onClick: pick(null) },
+        { separator: true },
+        { label: `Только ${describeTarget(app.project, { levelId: lvl.id })}`, icon: 'layers', disabled: empty, onClick: pick({ levelId: lvl.id }) },
+        selLabel ? { label: `Только ${selLabel}`, icon: 'select', disabled: empty, onClick: pick(selTarget) } : { label: 'Только выделенное — сначала выделите на плане', icon: 'select', disabled: true },
+        { label: 'Только участок', icon: 'site', disabled: empty, onClick: pick({ levelId: SITE_LEVEL }) },
+      ],
+    });
   }
 
   _renderThumbs() {
@@ -355,11 +466,11 @@ export class AiPanel {
   }
 
   /** Открыть вкладку и поставить курсор в поле запроса. */
-  focus(text = '') {
+  focus(text = '', { force = false } = {}) {
     this.app.ui.side.open('ai', this.app.state.isPhone ? 'full' : 'half');
     if (text) this.input.value = text;
     this._grow();
-    if (!this.app.state.coarse || text) setTimeout(() => this.input.focus(), 320);
+    if (!this.app.state.coarse || text || force) setTimeout(() => this.input.focus(), 320);
   }
 
   async addImages(files) {
@@ -379,6 +490,8 @@ export class AiPanel {
   async newChat() {
     if (this.busy) this.stop();
     this.chat = [];
+    this.scope = null;
+    this._renderScope();
     this._save();
     this.render();
   }
@@ -390,7 +503,12 @@ export class AiPanel {
   retry() {
     const last = this.chat[this.chat.length - 1];
     if (!last?.retry) return;
-    const { text, images } = last.retry;
+    const { text, images, scoped } = last.retry;
+    // запрос был по области, а её больше нет — не выполняем его по всему проекту молча
+    if (scoped && !this.scope) {
+      this.app.toast('Области этого запроса больше нет — выделите её на плане заново', 'warn');
+      return;
+    }
     this.chat.splice(-2, 2);
     this.images = images || [];
     this.send(text);
@@ -413,15 +531,17 @@ export class AiPanel {
     const model = getModel();
     const images = this.images;
     const history = this.chat.filter((m) => !m.pending);
-    const user = { role: 'user', text, images: images.length || undefined };
+    const snapshot = snapshotProject(app.project, { activeLevelId: app.state.activeLevelId, selection: app.state.selection, issues: app.checks.issues, scope: this.scope?.target });
+    const scoped = !!snapshot.scope;
+    const user = { role: 'user', text, images: images.length || undefined, scope: snapshot.scope?.label };
     const bot = { role: 'assistant', text: '', pending: true, status: 'Думаю…' };
     this.chat.push(user, bot);
     if (textArg === undefined) this.input.value = '';
     this.images = [];
     this._renderThumbs();
     this._grow();
-    const snapshot = snapshotProject(app.project, { activeLevelId: app.state.activeLevelId, selection: app.state.selection, issues: app.checks.issues });
-    const startRev = this.rev;
+    // ход: сколько шагов применено и каким был проект после нашего последнего шага
+    const turn = { rev: this.rev, applied: 0, build: false, warnings: 0 };
     this.busy = { controller: new AbortController() };
     this.render();
     const live = (patch) => {
@@ -431,6 +551,10 @@ export class AiPanel {
       if ('status' in patch) this._live.status.lastChild.textContent = bot.status;
       this.log.scrollTop = this.log.scrollHeight;
     };
+    // текст прошлых шагов остаётся над текущим
+    let done = '';
+    const stepNo = () => (bot.steps?.length || 0) + 1;
+    const many = () => (bot.steps?.length ? `Шаг ${stepNo()}: ` : '');
     try {
       const res = await runTurn({
         key,
@@ -443,24 +567,30 @@ export class AiPanel {
         snapshot,
         signal: this.busy.controller.signal,
         onProgress: (p) => {
-          if (p.type === 'text') live({ text: p.text, status: 'Пишу ответ…' });
-          else if (p.type === 'tool') live({ status: `${p.name === 'build_project' ? 'Строю проект' : 'Готовлю правки'}… ${kb(p.chars)}` });
-          else if (p.type === 'retry') live({ status: `Правки не легли — Claude исправляет (попытка ${p.attempt + 1})…` });
-          else if (p.type === 'thinking') live({ status: 'Обдумываю…' });
+          if (p.type === 'text') live({ text: [done, p.text].filter(Boolean).join('\n\n'), status: 'Пишу ответ…' });
+          else if (p.type === 'tool') live({ status: `${many()}${p.name === 'build_project' ? 'строю проект' : 'готовлю правки'}… ${kb(p.chars)}`.replace(/^./, (c) => c.toUpperCase()) });
+          else if (p.type === 'retry') live({ status: p.cut ? 'Ответ не поместился — Claude делит работу на части…' : `Правки не легли — Claude исправляет (попытка ${p.attempt + 1})…` });
+          else if (p.type === 'thinking') live({ status: `${many()}обдумываю…`.replace(/^./, (c) => c.toUpperCase()) });
           else if (p.type === 'wait') live({ status: `Сервер занят — повторю через ${p.seconds} с (попытка ${p.attempt + 1})…` });
+        },
+        onStep: async (st) => {
+          done = bot.text;
+          return this._applyStep(st, bot, turn);
         },
       });
       bot.text = res.text;
       bot.usage = res.usage;
-      if (res.project) await this._apply(res, bot, startRev);
-      if (!bot.text && !bot.applied && !bot.error) bot.text = res.tool ? 'Изменений не потребовалось.' : '…';
+      if (res.stopped && turn.applied && !bot.error) bot.more = true;
+      if (!bot.text && !turn.applied && !bot.error) bot.text = res.steps.length || res.requests > 1 ? 'Изменений не потребовалось.' : '…';
     } catch (err) {
       bot.text = err.text || bot.text;
       bot.usage = err.usage || bot.usage;
       bot.error = describeError(err, model);
-      if (err.name !== 'AbortError') bot.retry = { text, images };
+      if (err.name !== 'AbortError') bot.retry = { text, images, scoped };
+      else if (turn.applied) bot.error = 'Остановлено. Шаги, которые уже применены, остались в проекте — их можно отменить.';
       if ([401, 403, 404].includes(err.status) || err.needsWorkspace) bot.fixKey = true;
     } finally {
+      if (turn.applied) this._finishApply(bot, turn);
       bot.pending = false;
       delete bot.status;
       this.busy = null;
@@ -469,28 +599,53 @@ export class AiPanel {
     }
   }
 
-  async _apply(res, bot, startRev) {
+  /**
+   * Применить шаг Claude к проекту. Первый шаг — новый шаг истории, следующие продолжают его:
+   * весь ответ отменяется одним Ctrl+Z.
+   * @returns {boolean} false — пользователь отказался, ход останавливается
+   */
+  async _applyStep(st, bot, turn) {
     const app = this.app;
-    if (this.rev !== startRev) {
-      const ok = await app.confirm('Пока Claude отвечал, проект изменился. Применить ответ? Ваши последние правки заменятся — вернуть их можно кнопкой «Отменить».', 'Применить');
+    const ours = this.rev === turn.rev;
+    if (!ours) {
+      const ok = await app.confirm('Пока Claude работал, проект изменился. Применить его шаг? Ваши последние правки заменятся — вернуть их можно кнопкой «Отменить».', 'Применить');
       if (!ok) {
-        bot.error = 'Не применено: проект изменился, пока Claude отвечал';
-        return;
+        bot.error = turn.applied ? 'Остановлено: проект изменился, пока Claude работал. Применённые шаги остались в проекте.' : 'Не применено: проект изменился, пока Claude отвечал';
+        return false;
       }
     }
-    const fit = res.tool === 'build_project';
-    carryOver(app.project, res.project);
-    app.commands.applyAiProject(res.project, { fit });
+    const fit = st.tool === 'build_project';
+    carryOver(app.project, st.project);
+    // область задания переезжает в новый проект вместе с выделением
+    if (this.scope) this.scope = st.target ? { target: st.target, label: this.scope.label } : null;
+    app.commands.applyAiProject(st.project, { fit, replace: ours && turn.applied > 0 });
+    if (st.target?.selection) app.state.setSelection(st.target.selection); // выделение не теряется после шага
+    app.checks.run({ quiet: true }); // без всплывающих уведомлений на каждом шаге: итог проверки — под ответом
+    this._renderScope();
+    turn.applied++;
+    turn.build ||= fit;
+    turn.warnings += st.warnings.length;
+    turn.rev = this.rev;
+    bot.steps = [...(bot.steps || []), st.summary || (fit ? 'Проект построен' : 'Изменения применены')];
+    bot.status = 'Шаг применён — продолжаю…';
+    // на телефоне шторка на весь экран закрывает план — опускаем до половины, чтобы шаги было видно
+    if (app.state.isPhone && document.body.classList.contains('sheet-full')) app.ui.side.open('ai', 'half');
+    this.render();
+    return true;
+  }
+
+  /** Итог применённых шагов: что сделано, размеры проекта, замечания проверки. */
+  _finishApply(bot, turn) {
+    const app = this.app;
     const issues = app.checks.run({ quiet: true });
     const errors = issues.filter((i) => i.level === 'error').length;
-    bot.applied = res.summary || (fit ? 'Проект построен' : 'Изменения применены');
-    bot.kind = fit ? 'build' : 'edit';
-    bot.stats = statsText(app.project) + (res.warnings.length ? ` · поправлено при импорте: ${res.warnings.length}` : '');
+    bot.applied = bot.steps.join('; ');
+    bot.kind = turn.build ? 'build' : 'edit';
+    bot.stats = statsText(app.project) + (turn.warnings ? ` · поправлено при импорте: ${turn.warnings}` : '');
     bot.issues = issues.length ? summarizeIssues(issues) : '';
     bot.issueCount = issues.length;
     bot.issueErrors = errors;
-    bot.rev = this.rev;
-    // на телефоне шторка на весь экран закрывает план — опускаем до половины
-    if (app.state.isPhone && document.body.classList.contains('sheet-full')) app.ui.side.open('ai', 'half');
+    // «Отменить» — пока после последнего шага проект не меняли
+    bot.rev = this.rev === turn.rev ? this.rev : null;
   }
 }

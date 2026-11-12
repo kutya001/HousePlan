@@ -3,8 +3,10 @@
 /**
  * Поток событий так, как его шлёт Messages API.
  * @param opts.thinking — добавить блок размышления (текст и подпись) перед ответом
+ * @param opts.cut — оборвать JSON инструмента на этой доле длины (0…1): ответ упёрся в предел, stop_reason = max_tokens
+ * @param opts.id — id вызова инструмента (в одном разговоре они разные)
  */
-export function sseStream({ text = 'Делаю.', tool = null, input = null, stop = 'end_turn', thinking = null } = {}) {
+export function sseStream({ text = 'Делаю.', tool = null, input = null, stop = 'end_turn', thinking = null, cut = 0, id = 'toolu_1' } = {}) {
   const ev = (type, data) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
   let s = ev('message_start', { message: { id: 'msg_1', role: 'assistant', content: [], model: 'm', usage: { input_tokens: 1200, cache_read_input_tokens: 9000, output_tokens: 1 } } });
   let i = 0;
@@ -23,12 +25,13 @@ export function sseStream({ text = 'Делаю.', tool = null, input = null, sto
     i++;
   }
   if (tool) {
-    const json = JSON.stringify(input);
-    s += ev('content_block_start', { index: i, content_block: { type: 'tool_use', id: 'toolu_1', name: tool, input: {} } });
+    let json = JSON.stringify(input);
+    if (cut) json = json.slice(0, Math.max(1, Math.floor(json.length * cut)));
+    s += ev('content_block_start', { index: i, content_block: { type: 'tool_use', id, name: tool, input: {} } });
     for (let k = 0; k < json.length; k += 40) s += ev('content_block_delta', { index: i, delta: { type: 'input_json_delta', partial_json: json.slice(k, k + 40) } });
     s += ev('content_block_stop', { index: i });
   }
-  s += ev('message_delta', { delta: { stop_reason: tool ? 'tool_use' : stop }, usage: { output_tokens: 345 } });
+  s += ev('message_delta', { delta: { stop_reason: cut ? 'max_tokens' : tool ? 'tool_use' : stop }, usage: { output_tokens: 345 } });
   s += ev('message_stop', {});
   return s;
 }

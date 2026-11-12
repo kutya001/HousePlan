@@ -88,6 +88,9 @@ export class LevelsPanel {
             `отм. ${fmtElev(levelElevation(project, l.id))} · ${l.kind === 'attic' ? `колено ${fmtLenShort(kneeWall(l))}` : `h ${fmtLenShort(l.height)}`}${walls ? '' : ' · пусто'}`,
           ),
         ),
+        walls
+          ? h('button', { class: 'icon-btn icon-btn-small', 'data-tip': 'Запрос ИИ по этому этажу', 'aria-label': `Запрос ИИ по этажу ${l.name}`, onclick: () => app.ui.side.ai.ask({ levelId: l.id }) }, icon('spark', 16))
+          : null,
         project.levels.length > 1
           ? h('button', { class: 'icon-btn icon-btn-small', 'data-tip': 'Удалить этаж', 'aria-label': `Удалить ${l.name}`, onclick: () => app.commands.removeLevel(l.id) }, icon('trash', 16))
           : null,

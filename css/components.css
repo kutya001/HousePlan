@@ -1741,6 +1741,73 @@ kbd {
   border-color: var(--accent);
   box-shadow: var(--focus);
 }
+.ai-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 9px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: var(--fs-s);
+}
+.ai-scope[hidden] {
+  display: none;
+}
+.ai-scope > .icon {
+  flex: none;
+  color: var(--accent);
+}
+.ai-scope-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ai-scope-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ai-scope-x:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.ai-scope-btn.active {
+  color: var(--accent);
+}
+.ai-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--fs-s);
+}
+.ai-steps.live {
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+}
+.ai-steps.live li {
+  display: flex;
+  gap: 5px;
+}
+.ai-steps.live .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--snap);
+}
 .ai-composer-row {
   display: flex;
   align-items: center;

@@ -36,17 +36,46 @@ function sideOut(w, side) {
 
 // ── Экспорт ──────────────────────────────────────────────────────────────
 
+/** id, который можно оставить элементу: не число (числа — номера в списке) и без знаков пути. */
+const KEEP_ID = /^[A-Za-zА-Яа-яЁё_][\wА-Яа-яЁё-]{0,23}$/;
+
 /**
  * Проект → формат «houseplan-ai» (его же понимает импорт).
  * @param opts.ids — дать id всем элементам (o1, r1, s1, f1, k1, g1, z1): по ним
  *                   ИИ-помощник адресует правки, не пересчитывая номера в списках.
  * @param opts.idMap — Map: id элемента проекта → { id, level } в этом JSON (level — номер этажа или 'site').
+ * @param opts.keep — Map: id элемента проекта → id, под которым он уже известен ИИ (sourceIds импорта):
+ *                    элементы сохраняют прежние id от шага к шагу, новые получают свободные номера.
  */
-export function toExchange(project, { ids: withIds = false, idMap = null } = {}) {
+export function toExchange(project, { ids: withIds = false, idMap = null, keep = null } = {}) {
   const counters = {};
+  const reserved = new Set(keep ? keep.values() : []);
+  const used = new Set();
+  /** Счётчик новых id: после наибольшего из прежних — id удалённого элемента не достанется новому. */
+  const counter = (prefix) => {
+    let n = 0;
+    for (const id of reserved) {
+      const m = id.startsWith(prefix) && /^\d+$/.test(id.slice(prefix.length)) ? Number(id.slice(prefix.length)) : 0;
+      if (m > n) n = m;
+    }
+    return { n };
+  };
+  /** Прежний id элемента, если он годится для адреса правки и ещё не занят, иначе — следующий свободный. */
+  const pick = (prefix, ent, taken, count) => {
+    const old = ent && keep?.get(ent.id);
+    if (old && KEEP_ID.test(old) && !taken.has(old)) {
+      taken.add(old);
+      return old;
+    }
+    let id;
+    do id = `${prefix}${(count.n += 1)}`;
+    while (taken.has(id) || reserved.has(id));
+    taken.add(id);
+    return id;
+  };
   const tag = (prefix, obj, ent, level) => {
     if (!withIds) return obj;
-    const id = `${prefix}${(counters[prefix] = (counters[prefix] || 0) + 1)}`;
+    const id = pick(prefix, ent, used, (counters[prefix] ||= counter(prefix)));
     if (ent) idMap?.set(ent.id, { id, level });
     return { id, ...obj };
   };
@@ -68,6 +97,8 @@ export function toExchange(project, { ids: withIds = false, idMap = null } = {})
   };
   project.levels.forEach((level, li) => {
     const ids = new Map();
+    const wallIds = new Set();
+    const wallCount = counter('w');
     const walls = project.walls.filter((w) => w.levelId === level.id);
     const lv = {
       name: level.name,
@@ -75,8 +106,8 @@ export function toExchange(project, { ids: withIds = false, idMap = null } = {})
       height: r3(level.height),
       slab: r3(level.slab),
       ...(level.kind === 'attic' ? { kneeWall: r3(level.kneeWall ?? 1.2) } : {}),
-      walls: walls.map((w, i) => {
-        const id = `w${i + 1}`;
+      walls: walls.map((w) => {
+        const id = pick('w', w, wallIds, wallCount);
         ids.set(w.id, id);
         idMap?.set(w.id, { id, level: li });
         return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}), ...(isColor(w.color) ? { color: w.color } : {}), ...(WALL_TYPES[w.type] ? { material: w.type } : {}), ...sideOut(w, 'A'), ...sideOut(w, 'B') };
@@ -271,8 +302,17 @@ function unitScale(data) {
   return 1;
 }
 
+/**
+ * @returns {{ project, warnings, format, sourceIds }} sourceIds — Map: id элемента проекта → его id в JSON
+ *          (для toExchange({ keep }): ИИ видит те же id на следующем шаге)
+ */
 export function fromExchange(data) {
   const warnings = [];
+  const src = new Map();
+  const mark = (ent, raw) => {
+    if (ent && raw && raw.id != null) src.set(ent.id, String(raw.id));
+    return ent;
+  };
   const k = unitScale(data);
   if (k !== 1) warnings.push(`Размеры были в ${k === 0.01 ? 'сантиметрах' : 'миллиметрах'} — переведены в метры`);
   const project = createEmptyProject(String(data.name || 'Проект от ИИ'));
@@ -299,16 +339,16 @@ export function fromExchange(data) {
       ...(kind === 'attic' ? { kneeWall: clamp(num(l.kneeWall, 1.2 / k) * k, 0.3, 2.5) } : {}),
     });
     project.levels.push(lvl);
-    importLevel(project, lvl, l, k, warnings);
+    importLevel(project, lvl, l, k, warnings, mark);
   }
 
-  for (const it of [...(data.outdoor || []), ...(data.items || []).filter((x) => x?.outdoor)]) addItem(project, SITE_LEVEL, it, k, warnings);
+  for (const it of [...(data.outdoor || []), ...(data.items || []).filter((x) => x?.outdoor)]) mark(addItem(project, SITE_LEVEL, it, k, warnings), it);
   for (const z of data.zones || []) {
     const pts = points(z.points, k);
     if (pts.length < 3) continue;
     const m = ZONE_MATERIALS[z.material] ? z.material : 'lawn';
     if (!ZONE_MATERIALS[z.material]) warnings.push(`Неизвестное покрытие участка «${z.material}» — стало газоном`);
-    project.zones.push(createZone(pts, m));
+    project.zones.push(mark(createZone(pts, m), z));
   }
   if (!project.roofs.length && project.walls.length) warnings.push('Крыши нет — её можно поставить инструментом «Крыша» → «По контуру этажа»');
   const p = normalizeProject(project);
@@ -321,7 +361,7 @@ export function fromExchange(data) {
     if (r != null) it.rotation = Math.round(r * 10) / 10;
     else warnings.push('Мансардное окно стоит не над скатом крыши своего этажа');
   }
-  return { project: p, warnings, format: 'ai' };
+  return { project: p, warnings, format: 'ai', sourceIds: src };
 }
 
 function order(kind) {
@@ -332,7 +372,7 @@ function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
-function importLevel(project, lvl, l, k, warnings) {
+function importLevel(project, lvl, l, k, warnings, mark = (e) => e) {
   const ids = new Map();
   const walls = [];
   (l.walls || []).forEach((w, i) => {
@@ -358,7 +398,7 @@ function importLevel(project, lvl, l, k, warnings) {
       if (WALL_FINISHES[sd.finish]) wall[`finish${side}`] = sd.finish;
       if (isColor(sd.color)) wall[`color${side}`] = sd.color;
     }
-    walls.push(wall);
+    walls.push(mark(wall, w));
     ids.set(String(w.id ?? i + 1), wall);
     ids.set(String(i), ids.get(String(i)) || wall);
   });
@@ -392,7 +432,7 @@ function importLevel(project, lvl, l, k, warnings) {
       continue;
     }
     project.openings.push(
-      createOpening(wall.id, kind, {
+      mark(createOpening(wall.id, kind, {
         style,
         t,
         width,
@@ -401,7 +441,7 @@ function importLevel(project, lvl, l, k, warnings) {
         flipSide: !!o.flipSide,
         flipHinge: !!o.flipHinge,
         ...(DESCENTS[o.descent] ? { descent: o.descent } : {}),
-      }),
+      }), o),
     );
   }
 
@@ -411,7 +451,7 @@ function importLevel(project, lvl, l, k, warnings) {
     const floor = FLOOR_MATERIALS[r.floor] ? r.floor : 'laminate';
     const room = createRoom(lvl.id, pts, { name: String(r.name || 'Комната'), floor });
     if (r.heatedFloor === true) room.heatedFloor = true;
-    project.rooms.push(room);
+    project.rooms.push(mark(room, r));
   }
   if (!rooms.length && walls.length) {
     const faces = findFaces(walls);
@@ -429,26 +469,26 @@ function importLevel(project, lvl, l, k, warnings) {
     if (STAIR_STYLES[s.style]) st.style = s.style;
     if (RAILINGS[s.railing]) st.railing = s.railing;
     if (isColor(s.color)) st.color = s.color;
-    project.stairs.push(st);
+    project.stairs.push(mark(st, s));
   }
-  for (const it of l.furniture || l.items || []) addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings);
+  for (const it of l.furniture || l.items || []) mark(addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings), it);
   for (const r of l.roofs || (l.roof ? [l.roof] : [])) {
     const type = ROOF_TYPES[r.type] ? r.type : 'gable';
     project.roofs.push(
-      createRoof(lvl.id, num(r.x, 0) * k, num(r.y, 0) * k, Math.max(0.5, num(r.w, 8) * k), Math.max(0.5, num(r.d, 8) * k), {
+      mark(createRoof(lvl.id, num(r.x, 0) * k, num(r.y, 0) * k, Math.max(0.5, num(r.w, 8) * k), Math.max(0.5, num(r.d, 8) * k), {
         type,
         rotation: num(r.rotation, 0),
         pitch: clamp(num(r.pitch, DEFAULTS.roof.pitch), 0, 60),
         overhang: clamp(num(r.overhang, DEFAULTS.roof.overhang / k) * k, 0, 2),
         ...(ROOF_COVERS[r.cover] ? { cover: r.cover } : {}),
         ...(isColor(r.color) ? { color: r.color } : {}),
-      }),
+      }), r),
     );
   }
 }
 
 function addItem(project, levelId, it, k, warnings) {
-  if (!it) return;
+  if (!it) return null;
   const c = matchCatalog(it.type ?? it.name);
   const x = num(it.x, 0) * k;
   const y = num(it.y, 0) * k;
@@ -465,6 +505,7 @@ function addItem(project, levelId, it, k, warnings) {
     if (it.name) item.name = String(it.name);
   }
   project.items.push(item);
+  return item;
 }
 
 function nearestWall(walls, p) {

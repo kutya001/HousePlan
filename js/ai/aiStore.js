@@ -104,7 +104,7 @@ export function loadChat() {
 }
 
 export function saveChat(list) {
-  const keep = ['role', 'text', 'images', 'applied', 'kind', 'stats', 'issues', 'issueCount', 'issueErrors', 'undone', 'error', 'usage'];
+  const keep = ['role', 'text', 'images', 'scope', 'applied', 'steps', 'kind', 'stats', 'issues', 'issueCount', 'issueErrors', 'undone', 'error', 'usage'];
   const slim = list.slice(-60).map((m) => Object.fromEntries(keep.filter((k) => m[k] !== undefined).map((k) => [k, m[k]])));
   write(CHAT, slim.length ? JSON.stringify(slim) : null);
 }

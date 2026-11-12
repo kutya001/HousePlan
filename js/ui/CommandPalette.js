@@ -7,6 +7,7 @@ import { openModal } from './feedback.js';
 import { TOOL_META } from './Toolbar.js';
 import { CATALOG } from '../model/catalog.js';
 import { HOUSE_PRESETS } from '../model/presets.js';
+import { SITE_LEVEL } from '../model/project.js';
 
 export class CommandPalette {
   constructor(app) {
@@ -51,6 +52,8 @@ export class CommandPalette {
     cmd('Своя 3D-модель (.glb): загрузить и поставить', 'cube', () => app.file.importModel(), 'Каталог');
     cmd('Сохранить проект в файл', 'save', () => app.file.save(), 'Ctrl+S');
     cmd('ИИ-помощник: построить или изменить дом словами', 'spark', () => app.ui.side.ai.focus(), 'ИИ');
+    cmd('ИИ: запрос по выделенному или по активному этажу (менять только его)', 'scope', () => app.ui.side.ai.ask(app.ui.side.ai.currentTarget()), 'ИИ');
+    cmd('ИИ: запрос по участку', 'site', () => app.ui.side.ai.ask({ levelId: SITE_LEVEL }), 'ИИ');
     cmd('ИИ: ключ API и модель Claude', 'key', () => app.ui.side.ai.settings(), 'ИИ');
     cmd('ИИ: новый разговор', 'plus', () => app.ui.side.ai.newChat(), 'ИИ');
     cmd('Промпт для другой нейросети (скопировать в чат)', 'chat', () => app.ui.exchange.open('ai'), 'Файл');

@@ -4,6 +4,7 @@
  */
 import { h, icon, clear } from './dom.js';
 import { contextTitle } from '../app/contextActions.js';
+import { SITE_LEVEL } from '../model/project.js';
 
 export class SelectionBar {
   constructor(app, root) {
@@ -27,6 +28,8 @@ export class SelectionBar {
     const one = sel.length === 1 ? sel[0] : null;
     const name = one ? contextTitle(app, one) : `Выделено: ${sel.length}`;
     const items = [h('span', { class: 'sel-name' }, name), btn('panel', 'Свойства', () => app.ui.side.open('properties'), 'primary')];
+    // запрос ИИ по выделенному: помощник изменит только его
+    items.push(btn('spark', 'ИИ', () => app.ui.side.ai.ask(one?.kind === 'site' ? { levelId: SITE_LEVEL } : app.ui.side.ai.currentTarget())));
     if (one?.kind === 'opening') {
       items.push(btn('flip', 'Сторона', () => c.flipOpening(false)), btn('flip', 'Петли', () => c.flipOpening(true)));
     } else if (one?.kind === 'room') {

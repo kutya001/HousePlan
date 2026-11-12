@@ -343,17 +343,22 @@ export class Commands {
    * Правки: остаёмся на том же этаже (по номеру) и не двигаем вид.
    * Новый дом (fit): первый этаж и весь дом в кадре.
    */
-  applyAiProject(project, { fit = false } = {}) {
+  /**
+   * @param opts.fit — показать весь дом (новый проект)
+   * @param opts.replace — продолжение предыдущего шага ИИ: без нового шага истории
+   */
+  applyAiProject(project, { fit = false, replace = false } = {}) {
     // тот же этаж — по названию (ИИ мог добавить подвал снизу), иначе по номеру
     const name = this.state.level?.name;
     const byName = project.levels.findIndex((l) => l.name === name);
     const i = byName >= 0 ? byName : levelIndex(this.project, this.state.activeLevelId);
-    this._load(project, true, { fit, levelIndex: fit ? -1 : i });
+    this._load(project, true, { fit, levelIndex: fit ? -1 : i, replace });
   }
 
-  _load(project, keepHistory = false, { fit = true, levelIndex: li = -1 } = {}) {
+  _load(project, keepHistory = false, { fit = true, levelIndex: li = -1, replace = false } = {}) {
     this.app.editor.tool?.cancel?.();
-    this.store.load(project, { keepHistory });
+    if (replace) this.store.replace(project);
+    else this.store.load(project, { keepHistory });
     this.state.selection = [];
     const keep = li >= 0 ? project.levels[Math.min(li, project.levels.length - 1)] : null;
     this.state.activeLevelId = (keep || groundLevel(project)).id;

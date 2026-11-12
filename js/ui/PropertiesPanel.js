@@ -4,7 +4,7 @@
 import { h, icon, clear } from './dom.js';
 import { renderForm } from './Form.js';
 import { SCHEMAS, LEVEL_SCHEMA, PROJECT_SCHEMA } from '../model/schemas.js';
-import { getEntity, getLevel, KIND_LABEL } from '../model/project.js';
+import { getEntity, getLevel, KIND_LABEL, SITE_LEVEL } from '../model/project.js';
 import { catalogItem } from '../model/catalog.js';
 import { OPENING_KINDS } from '../model/defaults.js';
 
@@ -94,8 +94,14 @@ export class PropertiesPanel {
       list.push(btn('copy', 'Копия', () => c.duplicate()));
       if (['item', 'stair', 'roof', 'wall', 'room', 'zone'].includes(ref.kind)) list.push(btn('rotate', '90°', () => c.rotateSelection(90)));
     }
+    list.push(this._aiButton(ref.kind === 'site' ? { levelId: SITE_LEVEL } : { selection: [{ kind: ref.kind, id: ref.id }] }));
     if (ref.kind !== 'site') list.push(btn('trash', 'Удалить', () => c.deleteSelection(), 'btn-danger-ghost'));
     return h('div', { class: 'panel-actions' }, list);
+  }
+
+  /** «Запрос ИИ»: помощник изменит только эту область (объект, выделенное или этаж). */
+  _aiButton(target, label = 'Запрос ИИ') {
+    return h('button', { class: 'btn btn-small', 'data-tip': 'ИИ-помощник изменит только это', onclick: () => this.app.ui.side.ai.ask(target) }, icon('spark', 16), label);
   }
 
   /**
@@ -142,6 +148,7 @@ export class PropertiesPanel {
         { class: 'panel-actions' },
         h('button', { class: 'btn btn-small', onclick: () => c.duplicate() }, icon('copy', 16), 'Копия'),
         h('button', { class: 'btn btn-small', onclick: () => c.rotateSelection(90) }, icon('rotate', 16), '90°'),
+        this._aiButton({ selection: sel.map((s) => ({ kind: s.kind, id: s.id })) }),
         h('button', { class: 'btn btn-small btn-danger-ghost', onclick: () => c.deleteSelection() }, icon('trash', 16), 'Удалить'),
       ),
     );
@@ -167,6 +174,7 @@ export class PropertiesPanel {
         { class: 'panel-actions' },
         h('button', { class: 'btn btn-small', onclick: () => app.commands.autoRooms() }, icon('room', 16), 'Найти комнаты'),
         h('button', { class: 'btn btn-small', onclick: () => app.editor.setTool('roof') }, icon('roof', 16), 'Крыша'),
+        this._aiButton({ levelId }, 'Запрос ИИ по этажу'),
       ),
       h('div', { class: 'panel-head panel-head-sub' }, h('h3', {}, 'Проект')),
       pf.el,
