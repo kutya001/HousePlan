@@ -17,12 +17,12 @@ function rng(seed) {
   };
 }
 
-const gray = (v) => {
+export const gray = (v) => {
   const c = Math.max(0, Math.min(255, Math.round(v * 255)));
   return `rgb(${c},${c},${c})`;
 };
 
-function noise(g, w, h, amount, rand, size = 2) {
+export function noise(g, w, h, amount, rand, size = 2) {
   for (let i = 0; i < (w * h) / (size * size * 3); i++) {
     g.fillStyle = `rgba(0,0,0,${rand() * amount})`;
     g.fillRect(rand() * w, rand() * h, size, size);
@@ -342,6 +342,11 @@ const PATTERNS = {
     },
   },
 };
+
+/** Добавить текстуры (см. texturePack.js). */
+export function registerPatterns(defs) {
+  Object.assign(PATTERNS, defs);
+}
 
 /** Какой текстурой покрыть пол из данного материала. */
 export const FLOOR_TEXTURE = { parquet: 'parquet', laminate: 'laminate', tile: 'tile', stone: 'floorstone', carpet: 'carpet', concrete: 'concrete' };

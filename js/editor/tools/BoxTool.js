@@ -2,6 +2,7 @@
  * «Коробка»: протяните прямоугольник (или два клика) — получите 4 стены и пол.
  * Можно сразу на 2–3 этажа и с крышей. Размеры можно набрать: 8x10 и Enter.
  */
+import { WALL_TYPES, WALL_TYPE_GROUPS } from '../../model/wallTypes.js';
 import { Tool } from './Tool.js';
 import { THEME } from '../render/theme.js';
 import { drawSnapIndicator } from '../Snapper.js';
@@ -19,15 +20,26 @@ export class BoxTool extends Tool {
     this.cursor = 'crosshair';
     this.hint =
       'Протяните прямоугольник или кликните в двух углах. Размеры можно набрать с клавиатуры: 8x10 и Enter. Этажность и крышу выберите сверху.';
-    this.settings = { floors: '1', roof: 'none', thickness: DEFAULTS.wall.exterior.thickness };
+    this.settings = { floors: '1', roof: 'none', type: 'aerated', thickness: DEFAULTS.wall.exterior.thickness };
     this.options = [
+      { key: 'type', label: 'Стены', type: 'select', options: Object.fromEntries(WALL_TYPE_GROUPS[0].ids.map((id) => [id, WALL_TYPES[id].name])) },
       { key: 'floors', label: 'Этажей', type: 'segmented', options: { 1: '1', 2: '2', 3: '3' } },
       { key: 'roof', label: 'Крыша', type: 'select', options: { none: 'Без крыши', ...ROOF_TYPES } },
-      { key: 'thickness', label: 'Стены', type: 'number', min: 0.05, max: 1.5, step: 0.01, unit: 'м' },
+      { key: 'thickness', label: 'Толщина', type: 'number', min: 0.05, max: 1.5, step: 0.01, unit: 'м' },
     ];
     this.start = null;
     this.end = null;
     this.input = '';
+  }
+
+  onOptionChange(key, value) {
+    this.settings[key] = value;
+    // тип стены задаёт толщину по умолчанию
+    if (key === 'type' && WALL_TYPES[value]) {
+      this.settings.thickness = WALL_TYPES[value].thickness;
+      this.app.bus.emit('tool:options-refresh');
+    }
+    this.render();
   }
 
   get shortHint() {
@@ -128,6 +140,7 @@ export class BoxTool extends Tool {
       addStackedBox(p, this.levelId, x, y, w, d, {
         floors,
         roof: this.settings.roof,
+        type: this.settings.type,
         thickness: this.settings.thickness,
       }),
     );

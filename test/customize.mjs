@@ -11,6 +11,9 @@ export function customize(p) {
   p.levels[0].height = 3.1;
   for (const s of p.stairs) Object.assign(s, { railing: 'both', color: '#445566', flip: true, flight: 1.2, ...(s.shape !== 'spiral' ? { style: 'solid' } : {}) });
   if (p.walls[0]) Object.assign(p.walls[0], { height: 2.2, color: '#aabbcc' });
+  if (p.walls[1]) Object.assign(p.walls[1], { type: 'brick', thickness: 0.51, finishA: 'stone', colorA: '#998877', finishB: 'tile', colorB: '#ddeeff' });
+  const inner = p.walls.find((w) => w.kind === 'interior');
+  if (inner) Object.assign(inner, { type: 'glass', thickness: 0.02 });
   if (p.openings[0]) Object.assign(p.openings[0], { flipSide: true, flipHinge: true });
   if (p.items[0]) Object.assign(p.items[0], { h: 1.23, color: '#010203', elevation: 0.4 });
   if (p.rooms[0]) p.rooms[0].heatedFloor = true;

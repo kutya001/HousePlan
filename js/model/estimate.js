@@ -12,10 +12,16 @@ import { polygonArea, bboxOf } from '../core/geometry.js';
 import { catalogItem, CATALOG } from './catalog.js';
 import { FLOOR_MATERIALS, ZONE_MATERIALS, STAIR_SHAPES, OPENING_STYLES } from './defaults.js';
 import { groundLevel, isAttic, isBasement, isRoofTerrace, levelElevation, levelTop, wallHeight } from './project.js';
+import { WALL_TYPES, WALL_FINISHES, wallType, wallTypeId, wallSideFinish, isBearing } from './wallTypes.js';
+import { wallSides } from '../geometry/wallSides.js';
 
 /** Блок газобетона 600×300×250 мм. */
 const BLOCK_M3 = 0.6 * 0.3 * 0.25;
-const PARTITION_MAX = 0.15; // тоньше — перегородка
+/** Строки сметы прежних версий — для стен «по умолчанию» (цены у пользователя сохранены по этим ключам). */
+const WALL_KEY = { aerated: 'wall_ext', bearing_block: 'wall_int', part_block: 'partition' };
+const WALL_ROW = { aerated: 'Наружные стены — газобетон D500 с клеем', bearing_block: 'Внутренние несущие стены из блоков', part_block: 'Перегородки из блоков' };
+/** Поверхность самого материала стены: отдельной отделки не требует. */
+const NATIVE_FINISH = new Set(['timber', 'log', 'wood', 'glass', 'glassblock', 'brick', 'concrete']);
 const REBAR_KG_M3 = 80;
 
 /**
@@ -29,6 +35,23 @@ export const PRICE_DEFAULTS = {
   wall_ext: 5200,
   wall_int: 5200,
   partition: 900,
+  // прочие типы стен: кладка — за м³, каркас и перегородки — за м²
+  wall_brick: 9500,
+  wall_ceramic: 7800,
+  wall_timber: 21000,
+  wall_log: 19000,
+  wall_frame: 3900,
+  wall_sip: 3400,
+  wall_concrete: 14500,
+  wall_bearing_brick: 9500,
+  wall_bearing_timber: 21000,
+  wall_bearing_concrete: 14500,
+  wall_part_brick: 1500,
+  wall_drywall: 1100,
+  wall_tongue: 950,
+  wall_part_wood: 1300,
+  wall_glassblock: 9000,
+  wall_glass: 12000,
   lintel: 1800,
   slab: 13500,
   ground_slab: 6500,
@@ -43,7 +66,24 @@ export const PRICE_DEFAULTS = {
   roof_cover: 2100,
   roof_window: 38000,
   facade: 1600,
+  facade_paint: 600,
+  facade_brick: 3200,
+  facade_stone: 4500,
+  facade_siding: 1500,
+  facade_panels: 2800,
+  facade_timber: 1800,
+  facade_log: 1900,
+  facade_wood: 1500,
+  facade_concrete: 400,
   int_finish: 650,
+  int_brick: 2800,
+  int_stone: 3800,
+  int_timber: 1800,
+  int_log: 1900,
+  int_wood: 1500,
+  int_tile: 1900,
+  int_wallpaper: 550,
+  int_concrete: 300,
   ceiling: 700,
   window: 9500,
   door_ext: 38000,
@@ -266,7 +306,7 @@ export function computeEstimate(project) {
     const plinth = project.foundation ?? 0.45;
     for (const g of geomsByLevel.get(ground.id).values()) {
       const w = g.wall;
-      if (w.kind !== 'exterior' && w.thickness < 0.2) continue; // под перегородки — отдельная лента не нужна
+      if (!isBearing(w)) continue; // под перегородки — отдельная лента не нужна
       const depth = plinth + 0.8;
       concrete += g.len * (w.thickness + 0.1) * depth;
       excav += g.len * (w.thickness + 0.5) * 0.9;
@@ -276,44 +316,45 @@ export function computeEstimate(project) {
   }
   row(fnd, 'found_rebar', `Арматура фундамента (≈${REBAR_KG_M3} кг на м³)`, concrete * REBAR_KG_M3, 'кг');
 
-  // ── Стены ──
+  // ── Стены: по типам (из чего сложены) ──
   const wl = sec('Стены');
-  let ext = 0;
-  let intr = 0;
-  let part = 0;
+  const byType = new Map(); // id типа → количество в единицах типа (м³ или м²)
+  const outFinish = new Map(); // отделка фасада → м²
+  const inFinish = new Map(); // отделка в помещениях → м²
+  const bump = (map, k, v) => map.set(k, (map.get(k) || 0) + v);
   let lintels = 0;
-  let facade = 0;
-  let finish = 0;
   for (const level of levels) {
     const base = levelElevation(project, level.id);
     const underground = isBasement(level);
-    for (const g of geomsByLevel.get(level.id).values()) {
+    const geoms = geomsByLevel.get(level.id);
+    const sides = wallSides(project, level.id, geoms);
+    for (const g of geoms.values()) {
       const w = g.wall;
+      const t = wallType(w);
       const H = wallHeight(project, w);
       const ops = opsByWall.get(w.id) || [];
       const open = ops.reduce((s, o) => s + OPENING_AREA(o), 0);
       const gross = wallAreaClipped(project, g, base, H);
       const net = Math.max(0, gross - open);
-      if (w.kind === 'exterior') {
-        if (!underground) {
-          ext += net * w.thickness;
-          facade += net;
-        }
-        finish += net; // одна сторона внутрь
-        lintels += ops.filter((o) => o.kind !== 'arch').length;
-      } else if (w.thickness < PARTITION_MAX + 1e-6) {
-        part += net;
-        finish += net * 2;
-      } else {
-        intr += net * w.thickness;
-        finish += net * 2;
-        lintels += ops.length;
+      const below = underground && w.kind === 'exterior'; // стены подвала — в бетоне фундамента
+      if (!below) bump(byType, wallTypeId(w), t.unit === 'm3' ? net * w.thickness : net);
+      if (t.bearing) lintels += ops.filter((o) => w.kind !== 'exterior' || o.kind !== 'arch').length;
+      // отделка каждой стороны; «родная» поверхность (брус, бревно, стекло) отделки не требует
+      const side = sides.get(w.id);
+      for (const k of ['A', 'B']) {
+        const outside = side[k].outside;
+        if (below && outside) continue;
+        const f = wallSideFinish(w, k, { outside, facade: project.facade || 'plaster' }).finish;
+        if (NATIVE_FINISH.has(f) && f === (outside ? t.out : t.in) && !w[`finish${k}`]) continue;
+        bump(outside ? outFinish : inFinish, f, net);
       }
     }
   }
-  row(wl, 'wall_ext', 'Наружные стены — газобетон D500 с клеем', ext, 'м³', ext ? `≈ ${Math.ceil((ext / BLOCK_M3) * 1.05)} блоков 600×300×250` : '');
-  row(wl, 'wall_int', 'Внутренние несущие стены', intr, 'м³', intr ? `≈ ${Math.ceil((intr / BLOCK_M3) * 1.05)} блоков` : '');
-  row(wl, 'partition', 'Перегородки', part, 'м²');
+  for (const [id, qty] of byType) {
+    const t = WALL_TYPES[id];
+    const blocks = id === 'aerated' || id === 'bearing_block' ? `≈ ${Math.ceil((qty / BLOCK_M3) * 1.05)} блоков 600×300×250` : '';
+    row(wl, WALL_KEY[id] || `wall_${id}`, WALL_ROW[id] || `Стены: ${t.name.toLowerCase()}`, qty, t.unit === 'm3' ? 'м³' : 'м²', blocks);
+  }
   row(wl, 'lintel', 'Перемычки над проёмами', lintels, 'шт');
 
   // ── Перекрытия и полы ──
@@ -348,8 +389,11 @@ export function computeEstimate(project) {
 
   // ── Отделка ──
   const fin = sec('Отделка');
-  row(fin, 'facade', 'Фасад: утепление и декоративная штукатурка', facade, 'м²');
-  row(fin, 'int_finish', 'Стены внутри: штукатурка и покраска', finish, 'м²');
+  for (const [f, area] of outFinish) row(fin, f === 'plaster' ? 'facade' : `facade_${f}`, f === 'plaster' ? 'Фасад: утепление и декоративная штукатурка' : `Фасад: ${WALL_FINISHES[f].name.toLowerCase()}`, area, 'м²');
+  // штукатурка и покраска — одной строкой, прочая отделка — по видам
+  const plain = (inFinish.get('plaster') || 0) + (inFinish.get('paint') || 0);
+  row(fin, 'int_finish', 'Стены внутри: штукатурка и покраска', plain, 'м²');
+  for (const [f, area] of inFinish) if (f !== 'plaster' && f !== 'paint') row(fin, `int_${f}`, `Стены внутри: ${WALL_FINISHES[f].name.toLowerCase()}`, area, 'м²');
   row(fin, 'ceiling', 'Потолки', screed, 'м²');
 
   // ── Окна, двери, лестницы ──
@@ -420,7 +464,7 @@ export function computeEstimate(project) {
     basement: isBasement(lowest),
     ridge: r2(ridge),
     site: r2(siteArea),
-    walls: r2(ext + intr),
+    walls: r2([...byType].reduce((sum, [id, q]) => sum + (WALL_TYPES[id].unit === 'm3' ? q : 0), 0)), // кладка, м³
     roof: r2(roofArea),
     windows: r2(winArea),
   };

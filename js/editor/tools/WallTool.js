@@ -8,7 +8,7 @@ import { THEME } from '../render/theme.js';
 import { drawSnapIndicator } from '../Snapper.js';
 import { createWall, createRoom } from '../../model/factories.js';
 import { syncRoomsWithWalls } from '../../model/operations.js';
-import { DEFAULTS, WALL_KINDS } from '../../model/defaults.js';
+import { WALL_TYPES, wallTypeGroups } from '../../model/wallTypes.js';
 import { add, sub, mul, dist, norm, perp, mid, DEG, pointInPolygon, polygonCentroid, polygonArea } from '../../core/geometry.js';
 import { fmtLen, fmtAngle } from '../../core/format.js';
 import { uprightAngle } from '../render/drawDimensions.js';
@@ -21,9 +21,9 @@ export class WallTool extends Tool {
     this.cursor = 'crosshair';
     this.hint =
       'Клик — начало стены, клик — следующая точка. Курсор сам встаёт на середину стены (▲) и на линию центра комнаты — так комната делится ровно пополам. Цепочка закончится сама, когда упрётесь в стену. Число + Enter — точная длина. Shift — углы по 45°, Alt — без привязок.';
-    this.settings = { kind: 'exterior', thickness: DEFAULTS.wall.exterior.thickness, height: null };
+    this.settings = { type: 'aerated', kind: 'exterior', thickness: WALL_TYPES.aerated.thickness, height: null };
     this.options = [
-      { key: 'kind', label: 'Тип', type: 'segmented', options: WALL_KINDS },
+      { key: 'type', label: 'Тип', type: 'select', groups: wallTypeGroups() },
       { key: 'thickness', label: 'Толщина', type: 'number', min: 0.05, max: 1.5, step: 0.01, unit: 'м' },
       { key: 'height', label: 'Высота', type: 'number', min: 0.3, max: 12, step: 0.05, unit: 'м', placeholder: 'этаж', allowEmpty: true },
     ];
@@ -35,7 +35,10 @@ export class WallTool extends Tool {
 
   onOptionChange(key, value) {
     this.settings[key] = value;
-    if (key === 'kind') this.settings.thickness = DEFAULTS.wall[value]?.thickness ?? this.settings.thickness;
+    if (key === 'type' && WALL_TYPES[value]) {
+      this.settings.kind = WALL_TYPES[value].role;
+      this.settings.thickness = WALL_TYPES[value].thickness;
+    }
     this.app.bus.emit('tool:options-refresh');
     this.render();
   }
@@ -150,7 +153,7 @@ export class WallTool extends Tool {
     const s = this.settings;
     let split = 0;
     this.store.commit((proj) => {
-      proj.walls.push(createWall(this.levelId, last, p, { kind: s.kind, thickness: s.thickness, height: s.height || null }));
+      proj.walls.push(createWall(this.levelId, last, p, { type: s.type, thickness: s.thickness, height: s.height || null }));
       if (closing) this._autoRoom(proj, this.chain);
       else split = syncRoomsWithWalls(proj, this.levelId);
     });

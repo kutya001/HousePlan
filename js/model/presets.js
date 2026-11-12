@@ -429,9 +429,9 @@ function mansardHouse() {
 
 function banya() {
   const b = new B('Баня 6×4', { height: 2.3, foundation: 0.3 });
-  const [top, right, bottom, left] = b.loop(0, R(-3, -2, 3, 2), { thickness: 0.2 });
-  const p1 = b.wall(0, 0.5, -2, 0.5, 2, { thickness: 0.12 });
-  const p2 = b.wall(0, 0.5, 0, 3, 0, { thickness: 0.12 });
+  const [top, right, bottom, left] = b.loop(0, R(-3, -2, 3, 2), { type: 'timber', thickness: 0.2 });
+  const p1 = b.wall(0, 0.5, -2, 0.5, 2, { type: 'bearing_timber', thickness: 0.12 });
+  const p2 = b.wall(0, 0.5, 0, 3, 0, { type: 'bearing_timber', thickness: 0.12 });
   b.room(0, 'Комната отдыха', R(-3, -2, 0.5, 2), 'parquet');
   b.room(0, 'Моечная', R(0.5, 0, 3, 2), 'tile');
   b.room(0, 'Парная', R(0.5, -2, 3, 0), 'parquet');

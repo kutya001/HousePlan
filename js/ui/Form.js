@@ -22,7 +22,7 @@ export function renderForm(fields, getTarget, getProject, onChange) {
     if (f.visible && !f.visible(target, getProject())) continue;
     const id = `f${++uidCounter}`;
     const row = h('div', { class: `form-row form-${f.type}` });
-    const label = h('label', { for: id, class: 'form-label' }, f.label);
+    const label = h('label', { for: id, class: 'form-label' }, typeof f.label === 'function' ? f.label(target, getProject()) : f.label);
     if (f.hint) label.title = f.hint;
     let control;
     let read;
@@ -66,11 +66,12 @@ export function renderForm(fields, getTarget, getProject, onChange) {
       control = h('div', { class: 'input-unit' }, input, f.unit ? h('span', { class: 'unit' }, f.unit) : null);
       bindings.push({ control: input, write: () => write(f.get(getTarget(), getProject())) });
     } else if (f.type === 'select') {
-      const opts = typeof f.options === 'function' ? f.options(target) : f.options;
+      const opts = typeof f.options === 'function' ? f.options(target, getProject()) : f.options;
+      const option = ([k, v]) => h('option', { value: k }, v);
       const select = h(
         'select',
         { id },
-        Object.entries(opts).map(([k, v]) => h('option', { value: k }, v)),
+        f.groups ? f.groups.map((g) => h('optgroup', { label: g.label }, Object.entries(g.options).map(option))) : Object.entries(opts).map(option),
       );
       write = (v) => (select.value = v);
       select.addEventListener('change', () => onChange(f, select.value));

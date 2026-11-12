@@ -2,10 +2,15 @@
 import { uid } from '../core/ids.js';
 import { DEFAULTS, COLORS } from './defaults.js';
 import { catalogItem } from './catalog.js';
+import { WALL_TYPES } from './wallTypes.js';
 import { SITE_LEVEL } from './project.js';
 
+/**
+ * @param opts.type — тип стены из каталога (model/wallTypes.js): задаёт роль и толщину по умолчанию
+ */
 export function createWall(levelId, a, b, opts = {}) {
-  const kind = opts.kind || 'exterior';
+  const t = WALL_TYPES[opts.type];
+  const kind = t ? t.role : opts.kind || 'exterior';
   return {
     id: uid('wall'),
     levelId,
@@ -13,10 +18,11 @@ export function createWall(levelId, a, b, opts = {}) {
     y1: a.y,
     x2: b.x,
     y2: b.y,
-    thickness: opts.thickness ?? DEFAULTS.wall[kind]?.thickness ?? 0.3,
+    thickness: opts.thickness ?? t?.thickness ?? DEFAULTS.wall[kind]?.thickness ?? 0.3,
     height: opts.height ?? null,
     kind,
     color: opts.color ?? null,
+    ...(t ? { type: opts.type } : {}),
   };
 }
 

@@ -6,7 +6,7 @@ import { DEG, polygonArea } from '../core/geometry.js';
 import { fmtArea, fmtSotki, fmtElev } from '../core/format.js';
 import { LEVEL_KINDS, levelElevation, kneeWall } from './project.js';
 import {
-  WALL_KINDS,
+  COLORS,
   FLOOR_MATERIALS,
   ZONE_MATERIALS,
   ROOF_TYPES,
@@ -28,6 +28,9 @@ import { RAILINGS } from '../geometry/stairRails.js';
 import { roomWindowDirections } from '../geometry/orientation.js';
 import { siteGeo } from '../geometry/sun.js';
 import { wallLength } from './operations.js';
+import { WALL_TYPES, wallTypeGroups, wallTypeId, wallType, finishOptions, wallSideFinish } from './wallTypes.js';
+import { computeWallGeometry } from '../geometry/wallGeometry.js';
+import { wallSides, sideLabel } from '../geometry/wallSides.js';
 
 const num = (key, label, opts = {}) => ({
   type: 'number',
@@ -79,6 +82,67 @@ const posY = num('y', 'Положение Y', { min: -1000, max: 1000, step: 0.0
 
 const readonly = (label, get) => ({ type: 'readonly', label, get });
 
+/** Сторона стены: смотрит ли на улицу и какая комната за ней. */
+function wallSide(w, p, side) {
+  const geoms = computeWallGeometry(p.walls.filter((x) => x.levelId === w.levelId));
+  return wallSides(p, w.levelId, geoms).get(w.id)?.[side] || { outside: false, room: null };
+}
+
+const sideCtx = (w, p, side) => ({ outside: wallSide(w, p, side).outside, facade: p.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: COLORS.plinth });
+
+/** Два поля отделки одной стороны стены: материал и цвет. */
+function wallSideFields(side) {
+  const fk = `finish${side}`;
+  const ck = `color${side}`;
+  const visible = (w) => !wallType(w).glass;
+  const where = (w, p) => (wallSide(w, p, side).outside ? 'снаружи' : 'в помещениях');
+  // несколько стен разом: правим «ту же» сторону по смыслу (наружную или внутреннюю), а не по букве
+  const sameSide = (w, p, first) => {
+    const want = wallSide(first, p, side).outside;
+    const hit = ['A', 'B'].filter((k) => wallSide(w, p, k).outside === want);
+    return hit.length === 1 ? hit[0] : side;
+  };
+  const setColor = (w, k, v) => {
+    // старый общий цвет стены переезжает на обе стороны
+    if (w.color) {
+      w.colorA = w.colorA || w.color;
+      w.colorB = w.colorB || w.color;
+      w.color = null;
+    }
+    if (v) w[`color${k}`] = v;
+    else delete w[`color${k}`];
+  };
+  const setFinish = (w, k, v) => {
+    if (v) w[`finish${k}`] = v;
+    else delete w[`finish${k}`];
+  };
+  return [
+    {
+      type: 'select',
+      label: (w, p) => `Отделка ${sideLabel(wallSide(w, p, side))}`,
+      hint: 'У стены две стороны — у каждой своя отделка. «По умолчанию» — как задано типом стены и отделкой фасада проекта',
+      options: (w, p) => ({ '': 'По умолчанию', ...finishOptions(wallSide(w, p, side).outside) }),
+      get: (w) => w[fk] || '',
+      set: (w, v) => setFinish(w, side, v),
+      bulkLabel: (w, p) => `Отделка ${where(w, p)}`,
+      bulkSet: (w, v, p, first) => setFinish(w, sameSide(w, p, first), v),
+      visible,
+      bulk: true,
+    },
+    {
+      type: 'color',
+      label: (w, p) => `Цвет ${sideLabel(wallSide(w, p, side))}`,
+      allowReset: true,
+      get: (w, p) => w[ck] || wallSideFinish(w, side, sideCtx(w, p, side)).color,
+      set: (w, v) => setColor(w, side, v),
+      bulkLabel: (w, p) => `Цвет ${where(w, p)}`,
+      bulkSet: (w, v, p, first) => setColor(w, sameSide(w, p, first), v),
+      visible,
+      bulk: true,
+    },
+  ];
+}
+
 export const SCHEMAS = {
   wall: [
     {
@@ -97,14 +161,31 @@ export const SCHEMAS = {
       },
       hint: 'Конец стены сдвигается, начало остаётся на месте',
     },
-    num('thickness', 'Толщина', { min: 0.05, max: 1.5 }),
     {
-      ...num('height', 'Высота', { min: 0.3, max: 12 }),
+      type: 'select',
+      label: 'Тип стены',
+      hint: 'Из чего сложена стена: задаёт толщину, вид на срезе, штриховку на плане и строку сметы',
+      groups: wallTypeGroups(),
+      options: {},
+      get: (w) => wallTypeId(w),
+      set: (w, v) => {
+        const t = WALL_TYPES[v];
+        if (!t) return;
+        w.type = v;
+        w.kind = t.role;
+        w.thickness = t.thickness;
+      },
+      rebuild: true,
+      bulk: true,
+    },
+    num('thickness', 'Толщина', { min: 0.01, max: 1.5, bulk: true }),
+    {
+      ...num('height', 'Высота', { min: 0.3, max: 12, bulk: true }),
       placeholder: 'как у этажа',
       allowEmpty: true,
     },
-    select('kind', 'Тип', WALL_KINDS),
-    { ...color('color', 'Цвет'), allowReset: true },
+    ...wallSideFields('A'),
+    ...wallSideFields('B'),
   ],
   opening: [
     select('kind', 'Вид', OPENING_KINDS, {

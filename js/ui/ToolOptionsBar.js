@@ -119,7 +119,9 @@ export class ToolOptionsBar {
       const sel = h(
         'select',
         { onchange: (e) => tool.onOptionChange(o.key, e.target.value), 'aria-label': o.label },
-        Object.entries(o.options).map(([k, v]) => h('option', { value: k, selected: String(s[o.key]) === String(k) }, v)),
+        o.groups
+          ? o.groups.map((g) => h('optgroup', { label: g.label }, Object.entries(g.options).map(([k, v]) => h('option', { value: k, selected: String(s[o.key]) === String(k) }, v))))
+          : Object.entries(o.options).map(([k, v]) => h('option', { value: k, selected: String(s[o.key]) === String(k) }, v)),
       );
       return h('label', { class: 'opt-field' }, label, sel);
     }

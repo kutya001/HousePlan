@@ -1,6 +1,7 @@
 /** Кэш материалов: один материал на цвет, отдельно — подсветка выделения. */
 import * as THREE from 'three';
 import { patternTexture } from './textures.js';
+import './texturePack.js';
 
 /** Текстуры в 3D (настройка «Текстуры»): выставляет сборка сцены. */
 export const TEX = { on: true };

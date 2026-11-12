@@ -4,6 +4,7 @@
  * и просит вернуть проект в формате «houseplan-ai», который понимает импорт.
  * Справочники берутся из кода (каталог, материалы), поэтому промпт всегда актуален.
  */
+import { WALL_TYPES, WALL_TYPE_GROUPS, WALL_FINISHES } from '../model/wallTypes.js';
 import { CATALOG } from '../model/catalog.js';
 import { FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, OPENING_STYLES, DEFAULTS } from '../model/defaults.js';
 import { toExchange } from './exchange.js';
@@ -78,6 +79,11 @@ function catalogText() {
  * крыши, мебель, участок и самопроверка. Общие для промпта «скопировать в чат»
  * и для встроенного ИИ-помощника.
  */
+/** «наружные: aerated — газобетон 0.4, …; перегородки: …» — список типов стен для промпта. */
+function wallMaterialList() {
+  return WALL_TYPE_GROUPS.map((g) => `${g.label.toLowerCase()}: ${g.ids.map((id) => `${id} — ${WALL_TYPES[id].name.toLowerCase()} ${WALL_TYPES[id].thickness}`).join(', ')}`).join('; ');
+}
+
 export function formatRules() {
   return `ЕДИНИЦЫ И КООРДИНАТЫ
 - Все размеры в метрах, числа с точкой, не больше 3 знаков после точки.
@@ -98,6 +104,8 @@ export function formatRules() {
 - Наружные стены образуют ЗАМКНУТЫЙ контур: конец каждой стены ТОЧНО совпадает с началом следующей (одинаковые числа), последняя приходит в начало первой.
 - Перегородка начинается и заканчивается ТОЧНО на оси другой стены (Т-примыкание) или в углу. Не продлевай стены за пересечения, не дублируй и не накладывай стены друг на друга.
 - id — короткие уникальные строки внутри этажа ("w1", "w2"…), на них ссылаются проёмы.
+- material — из чего стена (необязательно; без него наружная — газобетон, внутренняя — перегородка из блоков). ${wallMaterialList()}. material задаёт и роль стены, и толщину по умолчанию (thickness можно не указывать).
+- Отделка сторон (необязательно): "sideA": {"finish": "...", "color": "#rrggbb"} и "sideB" — сторона A справа по ходу от from к to (на плане, где y вниз), сторона B — слева. finish: ${Object.entries(WALL_FINISHES).filter(([, f]) => f.where !== 'none').map(([k, f]) => `${k} — ${f.name.toLowerCase()}`).join(', ')}. Без sideA/sideB отделка берётся по типу стены: снаружи — фасад проекта (facade), внутри — штукатурка; у бруса и бревна — само дерево.
 
 ПРОЁМЫ (openings)
 - wall — id стены; offset — расстояние в метрах от точки from этой стены до ЦЕНТРА проёма.

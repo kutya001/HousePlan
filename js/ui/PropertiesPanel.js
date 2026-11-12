@@ -98,6 +98,34 @@ export class PropertiesPanel {
     return h('div', { class: 'panel-actions' }, list);
   }
 
+  /**
+   * Несколько объектов одного вида — общие свойства (тип стены, отделка, материал пола…)
+   * меняются у всех разом. Значения показаны по первому объекту.
+   */
+  _bulkForm(sel) {
+    const { app } = this;
+    const kind = sel[0].kind;
+    if (!sel.every((s) => s.kind === kind)) return null;
+    const fields = (SCHEMAS[kind] || []).filter((f) => f.bulk).map((f) => (f.bulkLabel ? { ...f, label: f.bulkLabel } : f));
+    if (!fields.length) return null;
+    const getTarget = () => getEntity(app.project, kind, sel[0].id);
+    if (!getTarget()) return null;
+    const form = renderForm(fields, getTarget, () => app.project, (field, value) => {
+      app.store.commit((p) => {
+        const first = getEntity(p, kind, sel[0].id);
+        for (const s of sel) {
+          const e = getEntity(p, kind, s.id);
+          if (!e || (field.visible && !field.visible(e, p))) continue;
+          if (field.bulkSet) field.bulkSet(e, value, p, first);
+          else field.set(e, value, p);
+        }
+      });
+      if (field.rebuild) this.render();
+    });
+    this.forms.push(form);
+    return h('div', {}, h('p', { class: 'muted small' }, 'Изменения применяются ко всем выделенным:'), form.el);
+  }
+
   _renderMulti(sel) {
     const c = this.app.commands;
     const counts = {};
@@ -108,6 +136,7 @@ export class PropertiesPanel {
     this.root.append(
       h('div', { class: 'panel-head' }, h('h3', {}, `Выделено: ${sel.length}`)),
       h('p', { class: 'muted' }, summary),
+      this._bulkForm(sel),
       h(
         'div',
         { class: 'panel-actions' },

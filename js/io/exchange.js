@@ -16,6 +16,7 @@ import { DESCENTS } from '../geometry/cellarEntry.js';
 import { FACADE_FINISHES, ROOF_COVERS } from '../model/finishes.js';
 import { RAILINGS } from '../geometry/stairRails.js';
 import { DEFAULTS, COLORS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
+import { WALL_TYPES, WALL_FINISHES } from '../model/wallTypes.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
 import { projectOnSegment, dist } from '../core/geometry.js';
@@ -25,6 +26,13 @@ export const AI_FORMAT = 'houseplan-ai';
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const pt = (p) => [r3(p.x), r3(p.y)];
 const isColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+
+/** Отделка стороны стены: sideA / sideB — только если задана своя. */
+function sideOut(w, side) {
+  const finish = WALL_FINISHES[w[`finish${side}`]] ? w[`finish${side}`] : null;
+  const color = isColor(w[`color${side}`]) ? w[`color${side}`] : null;
+  return finish || color ? { [`side${side}`]: { ...(finish ? { finish } : {}), ...(color ? { color } : {}) } } : {};
+}
 
 // ── Экспорт ──────────────────────────────────────────────────────────────
 
@@ -71,7 +79,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null } = {})
         const id = `w${i + 1}`;
         ids.set(w.id, id);
         idMap?.set(w.id, { id, level: li });
-        return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}), ...(isColor(w.color) ? { color: w.color } : {}) };
+        return { id, from: [r3(w.x1), r3(w.y1)], to: [r3(w.x2), r3(w.y2)], type: w.kind, thickness: r3(w.thickness), ...(w.height ? { height: r3(w.height) } : {}), ...(isColor(w.color) ? { color: w.color } : {}), ...(WALL_TYPES[w.type] ? { material: w.type } : {}), ...sideOut(w, 'A'), ...sideOut(w, 'B') };
       }),
       openings: [],
       rooms: project.rooms
@@ -334,13 +342,22 @@ function importLevel(project, lvl, l, k, warnings) {
       warnings.push(`${lvl.name}: стена ${w.id ?? i + 1} слишком короткая — пропущена`);
       return;
     }
-    const kind = wallKind(w.type ?? w.kind);
+    // material — тип стены из каталога (задаёт и роль); type — только роль: наружная / внутренняя
+    const type = WALL_TYPES[w.material] ? w.material : null;
+    const kind = type ? WALL_TYPES[type].role : wallKind(w.type ?? w.kind);
     const wall = createWall(lvl.id, a, b, {
       kind,
-      thickness: clamp(num(w.thickness, DEFAULTS.wall[kind].thickness / k) * k, 0.05, 1.5),
+      type,
+      thickness: clamp(num(w.thickness, (type ? WALL_TYPES[type].thickness : DEFAULTS.wall[kind].thickness) / k) * k, 0.01, 1.5),
       height: w.height ? num(w.height, 0) * k || null : null,
       color: isColor(w.color) ? w.color : null,
     });
+    for (const side of ['A', 'B']) {
+      const sd = w[`side${side}`];
+      if (!sd || typeof sd !== 'object') continue;
+      if (WALL_FINISHES[sd.finish]) wall[`finish${side}`] = sd.finish;
+      if (isColor(sd.color)) wall[`color${side}`] = sd.color;
+    }
     walls.push(wall);
     ids.set(String(w.id ?? i + 1), wall);
     ids.set(String(i), ids.get(String(i)) || wall);

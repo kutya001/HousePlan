@@ -13,6 +13,9 @@ import { COLORS } from '../../model/defaults.js';
 import { extrudePolygon, prismVarTop, mergeGeometries, mesh, planarUV } from '../meshUtils.js';
 import { mat, TEX } from '../materials.js';
 import { buildOpening } from './buildOpenings.js';
+import { splitWallFaces } from './wallFaces.js';
+import { wallSides } from '../../geometry/wallSides.js';
+import { wallType, wallSideFinish } from '../../model/wallTypes.js';
 
 /**
  * @param opts { plinth — цоколь под наружными стенами (нижний этаж над землёй),
@@ -41,23 +44,42 @@ export function buildWalls(project, levelId, base, { plinth = false, porch = fal
     return mergeGeometries(parts);
   };
 
+  const sides = wallSides(project, levelId, geoms);
+  const underground = isBasement(level);
+  const ctx = { facade: project.facade || 'plaster', facadeColor: COLORS.facade, interiorColor: COLORS.interior, plinthColor: COLORS.plinth };
   const plinthGeo = [];
   for (const g of geoms.values()) {
     const w = g.wall;
     const h = wallHeight(project, w);
     const ops = byWall.get(w.id) || [];
     const parts = wallPieces3D(g, ops, h, { overlap: 0.004 }).map((p) => piece(p.poly, base + p.y0, base + p.y1));
-    let geo = mergeGeometries(parts);
+    const geo = mergeGeometries(parts);
     if (geo) {
-      const underground = isBasement(level) && w.kind === 'exterior';
-      const color = w.color || (underground ? COLORS.plinth : w.kind === 'exterior' ? COLORS.facade : COLORS.interior);
-      // наружные стены — отделка фасада проекта (штукатурка, кирпич, сайдинг, камень)
-      const finish = underground ? 'concrete' : w.kind === 'exterior' ? project.facade || 'plaster' : 'plaster';
-      if (TEX.on) geo = planarUV(geo);
-      const m = mesh(geo, mat(color, { ...(underground ? { roughness: 0.95 } : {}), map: finish }), { kind: 'wall', id: w.id });
+      // стена — четыре поверхности: две стороны со своей отделкой, верхний срез (видно,
+      // из чего сложена) и откосы проёмов с торцами
+      const type = wallType(w);
+      const side = sides.get(w.id);
+      const below = underground && w.kind === 'exterior';
+      const fa = wallSideFinish(w, 'A', { ...ctx, outside: side.A.outside, underground: below });
+      const fb = wallSideFinish(w, 'B', { ...ctx, outside: side.B.outside, underground: below });
+      const inner = side.A.outside ? fb : fa; // откосы — как сторона в помещении
+      const faces = splitWallFaces(geo, g.n.x, g.n.y);
+      const ref = { kind: 'wall', id: w.id };
+      const surface = (f) =>
+        f.glass ? mat(f.color, { roughness: 0.08, metalness: 0.1, opacity: f.glass }) : mat(f.color, { roughness: f.finish === 'concrete' ? 0.95 : 0.85, map: f.tex || undefined });
+      const add = (part, material, cast = true) => {
+        if (!part) return null;
+        const m = mesh(TEX.on ? planarUV(part) : part, material, ref, { cast });
+        group.add(m);
+        return m;
+      };
+      const first = add(faces.A, surface(fa), !fa.glass) || add(faces.B, surface(fb), !fb.glass);
+      if (first && faces.A) add(faces.B, surface(fb), !fb.glass);
+      add(faces.top, type.glass ? surface(fa) : mat(below ? COLORS.plinth : type.body, { roughness: 0.95 }), !type.glass);
+      add(faces.rest, type.glass ? surface(fa) : surface({ ...inner, tex: inner.tex === 'brick' || inner.tex === 'stone' ? 'plaster' : inner.tex }), !type.glass);
       // контур стены целиком, без «швов» между кусками у проёмов
-      m.userData.edgesFrom = piece(g.poly, base, base + h);
-      group.add(m);
+      const host = first || group.children[group.children.length - 1];
+      if (host) host.userData.edgesFrom = piece(g.poly, base, base + h);
     }
     if (plinth && w.kind === 'exterior' && base > 0.01) plinthGeo.push(extrudePolygon(g.poly, 0, base));
     for (const o of ops) group.add(buildOpening(g, o, base, h));

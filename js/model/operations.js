@@ -42,6 +42,7 @@ export function addBox(project, levelId, x, y, w, d, opts = {}) {
   for (let i = 0; i < 4; i++) {
     const wall = createWall(levelId, pts[i], pts[(i + 1) % 4], {
       kind: opts.kind || 'exterior',
+      type: opts.type,
       thickness: opts.thickness,
     });
     project.walls.push(wall);
@@ -112,6 +113,13 @@ export function addBasementLevel(project, { semi = false } = {}) {
   const lvl = createLevel(0, { name, kind: 'basement', height: semi ? 2.6 : 2.4, slab: DEFAULTS.slab });
   project.levels.unshift(lvl);
   copyShell(project, above.id, lvl.id, semi ? 'Цокольный этаж' : 'Подвал');
+  // стены в грунте — монолит, отделка этажа над ними сюда не переносится
+  for (const w of project.walls) {
+    if (w.levelId !== lvl.id) continue;
+    w.type = 'concrete';
+    for (const k of ['finishA', 'finishB', 'colorA', 'colorB']) delete w[k];
+    w.color = null;
+  }
   if (semi) project.foundation = Math.max(project.foundation ?? DEFAULTS.foundation, 1.2);
   return lvl;
 }
