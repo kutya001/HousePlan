@@ -186,6 +186,21 @@ export function subtractConvex(poly, hole) {
   return out;
 }
 
+/** Простой ли многоугольник (без самопересечений рёбер). */
+export function isSimplePolygon(poly) {
+  const n = poly.length;
+  if (n < 3) return false;
+  for (let i = 0; i < n; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % n];
+    for (let j = i + 1; j < n; j++) {
+      if (j === (i + 1) % n || i === (j + 1) % n) continue; // соседние рёбра
+      if (segmentIntersect(a, b, poly[j], poly[(j + 1) % n], 1e-9)) return false;
+    }
+  }
+  return true;
+}
+
 export function isConvex(poly) {
   let sign = 0;
   for (let i = 0; i < poly.length; i++) {
