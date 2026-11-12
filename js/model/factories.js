@@ -42,6 +42,8 @@ export function createOpening(wallId, kind = 'door', opts = {}) {
     flipSide: !!opts.flipSide,
     flipHinge: !!opts.flipHinge,
     ...(opts.descent ? { descent: opts.descent } : {}),
+    // внешний вид (model/openings.js) — только то, что задано
+    ...Object.fromEntries(['leaf', 'color', 'frameColor', 'transom', 'sidelight', 'grid', 'arched'].filter((k) => opts[k] !== undefined && opts[k] !== null && opts[k] !== false && opts[k] !== '').map((k) => [k, opts[k]])),
   };
 }
 

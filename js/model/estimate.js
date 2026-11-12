@@ -10,6 +10,9 @@ import { roofGutters } from '../geometry/roofGutters.js';
 import { foundationParts, blindArea } from '../geometry/foundation.js';
 import { foundationOf, PLINTH_FINISHES } from './foundation.js';
 import { ROOF_COVERS, roofCover } from './finishes.js';
+import { DOOR_LEAVES, isGate, openingLook } from './openings.js';
+import { fenceRuns } from '../geometry/fence.js';
+import { FENCE_TYPES } from './fence.js';
 import { roofSurfaceAt, chimneyTop } from '../geometry/roofSurface.js';
 import { roomWindowDirections } from '../geometry/orientation.js';
 import { polygonArea, bboxOf } from '../core/geometry.js';
@@ -115,12 +118,25 @@ export const PRICE_DEFAULTS = {
   window: 9500,
   door_ext: 38000,
   door_int: 12000,
+  door_glass: 18000,
+  door_sliding: 32000,
   door_garage: 65000,
+  gate_swing: 42000,
+  gate_roll: 58000,
   stair_straight: 65000,
   stair_L: 95000,
   stair_U: 110000,
   stair_spiral: 130000,
   fence: 3800,
+  fence_wood: 4200,
+  fence_picket: 3200,
+  fence_mesh: 2600,
+  fence_forged: 9500,
+  fence_brick: 12000,
+  fence_concrete: 5200,
+  site_gate_swing: 48000,
+  site_gate_slide: 85000,
+  site_wicket: 18000,
   zone_paving: 1600,
   zone_gravel: 450,
   zone_asphalt: 1400,
@@ -206,8 +222,11 @@ export function openingSchedule(project) {
     .sort((a, b) => levelIdx.get(wallLevel.get(a.wallId).levelId) - levelIdx.get(wallLevel.get(b.wallId).levelId));
   for (const o of ops) {
     const w = wallLevel.get(o.wallId);
-    const prefix = o.kind === 'window' ? 'ОК' : o.kind === 'arch' ? 'П' : o.style === 'garage' ? 'В' : 'Д';
-    const key = [o.kind, o.style || '', r2(o.width), r2(o.height), o.kind === 'window' ? r2(o.sill || 0) : '', o.kind === 'door' ? w.kind : ''].join('|');
+    const prefix = o.kind === 'window' ? 'ОК' : o.kind === 'arch' ? 'П' : isGate(o) ? 'В' : 'Д';
+    const look = openingLook(o);
+    // одна марка — одинаковые и по размеру, и по исполнению (полотно, фрамуга, остекление, раскладка, арка)
+    const variant = o.kind === 'door' && !look.gate ? [look.leaf, r2(look.transom), o.sidelight && o.sidelight !== 'none' ? o.sidelight : ''] : [look.grid ? 'grid' : '', look.arched ? 'arch' : ''];
+    const key = [o.kind, o.style || '', r2(o.width), r2(o.height), o.kind === 'window' ? r2(o.sill || 0) : '', o.kind === 'door' ? w.kind : '', ...variant].join('|');
     if (!groups.has(key)) groups.set(key, { key, prefix, o, wallKind: w.kind, items: [], levels: new Set() });
     const g = groups.get(key);
     g.items.push(o);
@@ -222,10 +241,22 @@ export function openingSchedule(project) {
     for (const o of g.items) marks.set(o.id, mark);
     const o = g.o;
     const styleName = OPENING_STYLES[o.kind]?.[o.style] || '';
-    const kindName = o.kind === 'window' ? 'Окно' : o.kind === 'arch' ? 'Проём без двери' : o.style === 'garage' ? 'Ворота' : g.wallKind === 'exterior' ? 'Дверь входная' : 'Дверь межкомнатная';
+    const look = openingLook(o);
+    const kindName = o.kind === 'window' ? 'Окно' : o.kind === 'arch' ? (look.arched ? 'Арка' : 'Проём без двери') : look.gate ? styleName : g.wallKind === 'exterior' ? 'Дверь входная' : 'Дверь межкомнатная';
+    // исполнение: полотно, фрамуга, остекление сбоку, раскладка, арочный верх
+    const extra = [];
+    if (o.kind === 'door' && !look.gate) {
+      if (look.leaf !== 'solid') extra.push(`полотно ${DOOR_LEAVES[look.leaf].name.toLowerCase()}`);
+      if (look.transom > 0) extra.push('с фрамугой');
+      if (look.side.n) extra.push(look.side.n > 1 ? 'остекление с двух сторон' : 'остекление сбоку');
+    } else if (o.kind === 'window') {
+      if (look.arched) extra.push('арочное');
+      if (look.grid) extra.push('с раскладкой');
+    }
+    const base = styleName && o.kind !== 'arch' && !look.gate ? `${kindName}, ${styleName.toLowerCase()}` : kindName;
     rows.push({
       mark,
-      name: styleName && o.kind !== 'arch' && o.style !== 'garage' ? `${kindName}, ${styleName.toLowerCase()}` : kindName,
+      name: [base, ...extra].join(', '),
       width: o.width,
       height: o.height,
       sill: o.kind === 'window' ? o.sill || 0 : null,
@@ -476,22 +507,30 @@ export function computeEstimate(project) {
   let winCount = 0;
   let dExt = 0;
   let dInt = 0;
-  let gates = 0;
+  let dGlass = 0;
+  let dSlide = 0;
+  const gates = {};
   for (const o of project.openings) {
     if (!wallKind.has(o.wallId)) continue;
     if (o.kind === 'window') {
       winArea += OPENING_AREA(o);
       winCount++;
     } else if (o.kind === 'door') {
-      if (o.style === 'garage') gates++;
+      if (isGate(o)) gates[o.style] = (gates[o.style] || 0) + 1;
+      else if (o.style === 'sliding' || o.style === 'fold') dSlide++;
       else if (wallKind.get(o.wallId) === 'exterior') dExt++;
+      else if (openingLook(o).glass) dGlass++;
       else dInt++;
     }
   }
   row(od, 'window', 'Окна ПВХ с подоконниками и отливами', winArea, 'м²', winCount ? `${winCount} шт.` : '');
   row(od, 'door_ext', 'Двери входные', dExt, 'шт');
   row(od, 'door_int', 'Двери межкомнатные', dInt, 'шт');
-  row(od, 'door_garage', 'Гаражные ворота', gates, 'шт');
+  row(od, 'door_glass', 'Двери межкомнатные со стеклом и стеклянные', dGlass, 'шт');
+  row(od, 'door_sliding', 'Двери раздвижные и складные', dSlide, 'шт');
+  row(od, 'door_garage', 'Ворота секционные', gates.garage || 0, 'шт');
+  row(od, 'gate_swing', 'Ворота распашные', gates.garage_swing || 0, 'шт');
+  row(od, 'gate_roll', 'Ворота рулонные', gates.garage_roll || 0, 'шт');
   for (const [shape, name] of Object.entries(STAIR_SHAPES)) {
     row(od, `stair_${shape}`, `Лестница: ${name.toLowerCase()}`, project.stairs.filter((s) => s.shape === shape).length, 'шт');
   }
@@ -504,11 +543,19 @@ export function computeEstimate(project) {
 
   // ── Участок ──
   const site = sec('Участок');
-  const fence = project.site?.fence;
-  if (fence?.enabled && project.site.boundary?.length > 2) {
-    const b = project.site.boundary;
-    const per = b.reduce((s, p, i) => s + Math.hypot(b[(i + 1) % b.length].x - p.x, b[(i + 1) % b.length].y - p.y), 0);
-    row(site, 'fence', `Забор высотой ${String(fence.height ?? 1.8).replace('.', ',')} м`, per, 'м');
+  // забор — по видам и высотам (ворота и калитки из длины вычтены и считаются отдельно)
+  const fenceByKind = new Map();
+  for (const run of fenceRuns(project)) {
+    const k = `${run.type}|${run.height}`;
+    fenceByKind.set(k, (fenceByKind.get(k) || 0) + run.length);
+  }
+  for (const [k, len] of fenceByKind) {
+    const [type, h] = k.split('|');
+    const name = type === 'profsheet' ? 'Забор' : `Забор: ${FENCE_TYPES[type].name.toLowerCase()}`;
+    row(site, type === 'profsheet' ? 'fence' : `fence_${type}`, `${name} высотой ${String(h).replace('.', ',')} м`, len, 'м');
+  }
+  for (const [type, key] of [['gate_swing', 'site_gate_swing'], ['gate_slide', 'site_gate_slide'], ['wicket', 'site_wicket']]) {
+    row(site, key, catalogItem(type).name, project.items.filter((it) => it.type === type).length, 'шт');
   }
   const zones = {};
   for (const z of project.zones || []) zones[z.material] = (zones[z.material] || 0) + polygonArea(z.points);

@@ -2,6 +2,8 @@
  * Выбор и редактирование: клик — выделить, Shift — добавить, рамка — несколько,
  * перетаскивание — переместить, ручки — концы стен, поворот, размер, вершины.
  */
+import { snapToFence } from '../../geometry/fence.js';
+import { isFenceGate } from '../../model/fence.js';
 import { Tool } from './Tool.js';
 import { THEME } from '../render/theme.js';
 import { computeHandles, hitHandle } from '../handles.js';
@@ -252,6 +254,11 @@ export class SelectTool extends Tool {
       let snapped = null;
       if (s.ref.kind === 'item' && itemSnapsToWall(s.e) && !e.alt) {
         snapped = snapToWall(this.editor, c, s.e.d, s.e.w, { ignoreId: s.e.id });
+      }
+      // ворота и калитка держатся линии забора
+      if (s.ref.kind === 'item' && isFenceGate(s.e) && !e.alt) {
+        const sn = snapToFence(this.project, c, s.e.w);
+        if (sn) snapped = { ...sn, label: 'в линию забора' };
       }
       if (snapped) {
         c = snapped;

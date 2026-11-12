@@ -19,6 +19,9 @@ import { RAILINGS } from '../geometry/stairRails.js';
 import { DEFAULTS, COLORS, FLOOR_MATERIALS, ZONE_MATERIALS, ROOF_TYPES, STAIR_SHAPES, STAIR_STYLES, stairStyle, OPENING_STYLES } from '../model/defaults.js';
 import { WALL_TYPES, WALL_FINISHES } from '../model/wallTypes.js';
 import { foundationOf, FOUNDATION_TYPES, PLINTH_FINISHES, BLIND_AREA } from '../model/foundation.js';
+import { DOOR_LEAVES, SIDELIGHTS, isGate } from '../model/openings.js';
+import { FENCE_TYPES } from '../model/fence.js';
+import { RAIL_STYLES } from '../model/railings.js';
 import { findFaces } from '../geometry/roomDetect.js';
 import { computeWallGeometry, canPlaceOpening } from '../geometry/wallGeometry.js';
 import { projectOnSegment, dist } from '../core/geometry.js';
@@ -93,6 +96,11 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
       boundary: project.site.boundary.map(pt),
       fence: !!project.site.fence?.enabled,
       fenceHeight: r3(project.site.fence?.height ?? 1.8),
+      ...(FENCE_TYPES[project.site.fence?.type] && project.site.fence.type !== 'profsheet' ? { fenceType: project.site.fence.type } : {}),
+      // стороны со своим забором: номер стороны (от угла i границы к следующему)
+      ...(project.site.fence?.sides && Object.keys(project.site.fence.sides).length
+        ? { fenceSides: Object.entries(project.site.fence.sides).map(([i, v]) => ({ side: Number(i), ...(v.off ? { off: true } : {}), ...(FENCE_TYPES[v.type] ? { type: v.type } : {}), ...(v.height ? { height: r3(v.height) } : {}) })) }
+        : {}),
     },
     levels: [],
     outdoor: [],
@@ -121,7 +129,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
         .map((r) => tag('r', { name: r.name, floor: r.floor, ...(r.heatedFloor ? { heatedFloor: true } : {}), points: r.points.map(pt) }, r, li)),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
-        .map((s) => tag('s', { shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' || Math.abs((s.flight ?? DEFAULTS.stair.flight) - DEFAULTS.stair.flight) > 1e-3 ? { flight: r3(s.flight ?? DEFAULTS.stair.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(isColor(s.color) && s.color.toLowerCase() !== COLORS.stair.toLowerCase() ? { color: s.color } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) }, s, li)),
+        .map((s) => tag('s', { shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' || Math.abs((s.flight ?? DEFAULTS.stair.flight) - DEFAULTS.stair.flight) > 1e-3 ? { flight: r3(s.flight ?? DEFAULTS.stair.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(isColor(s.color) && s.color.toLowerCase() !== COLORS.stair.toLowerCase() ? { color: s.color } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}), ...(RAIL_STYLES[s.railStyle] && s.railStyle !== 'bars' ? { railStyle: s.railStyle } : {}), ...(s.railHeight ? { railHeight: r3(s.railHeight) } : {}), ...(isColor(s.railColor) ? { railColor: s.railColor } : {}) }, s, li)),
       furniture: project.items.filter((it) => it.levelId === level.id).map((it) => tag('f', itemOut(it), it, li)),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
@@ -140,6 +148,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
         ...(o.flipSide ? { flipSide: true } : {}),
         ...(o.flipHinge ? { flipHinge: true } : {}),
         ...(o.descent && o.descent !== 'out' ? { descent: o.descent } : {}),
+        ...lookOut(o),
       }, o, li));
     }
     out.levels.push(lv);
@@ -147,6 +156,20 @@ export function toExchange(project, { ids: withIds = false, idMap = null, keep =
   out.outdoor = project.items.filter((it) => it.levelId === SITE_LEVEL).map((it) => tag('g', itemOut(it), it, 'site'));
   out.zones = project.zones.map((z) => tag('z', { material: z.material, points: z.points.map(pt) }, z, 'site'));
   return out;
+}
+
+/** Внешний вид проёма (полотно, цвета, фрамуга, остекление, раскладка, арка) — только заданное. */
+function lookOut(o) {
+  const door = o.kind === 'door' && !isGate(o);
+  return {
+    ...(door && DOOR_LEAVES[o.leaf] ? { leaf: o.leaf } : {}),
+    ...(o.kind === 'door' && isColor(o.color) ? { color: o.color } : {}),
+    ...(isColor(o.frameColor) ? { frameColor: o.frameColor } : {}),
+    ...(door && o.transom > 0 ? { transom: r3(o.transom) } : {}),
+    ...(door && SIDELIGHTS[o.sidelight] && o.sidelight !== 'none' ? { sidelight: o.sidelight } : {}),
+    ...(o.kind === 'window' && o.grid ? { grid: true } : {}),
+    ...(o.kind === 'window' && o.arched ? { arched: true } : {}),
+  };
 }
 
 /** Вид фундамента, отделка цоколя и отмостка — только то, что отличается от умолчаний. */
@@ -365,6 +388,13 @@ export function fromExchange(data) {
   if (boundary.length >= 3) project.site.boundary = boundary;
   if (site.fence !== undefined) project.site.fence.enabled = typeof site.fence === 'object' ? site.fence.enabled !== false : !!site.fence;
   if (site.fenceHeight || site.fence?.height) project.site.fence.height = num(site.fenceHeight ?? site.fence?.height, 1.8 / k) * k;
+  if (FENCE_TYPES[site.fenceType]) project.site.fence.type = site.fenceType;
+  for (const fs of Array.isArray(site.fenceSides) ? site.fenceSides : []) {
+    const i = Math.round(num(fs?.side, -1));
+    if (i < 0 || i >= project.site.boundary.length) continue;
+    const side = { ...(fs.off === true ? { off: true } : {}), ...(FENCE_TYPES[fs.type] ? { type: fs.type } : {}), ...(num(fs.height, 0) > 0 ? { height: clamp(num(fs.height, 0) * k, 0.3, 4) } : {}) };
+    if (Object.keys(side).length) (project.site.fence.sides ||= {})[i] = side;
+  }
 
   // этажи: подвалы — вниз, мансарда — наверх
   const raw = data.levels.map((l, i) => ({ l: l || {}, i, kind: KIND_ALIASES[String(l?.kind || l?.type || 'floor').toLowerCase()] || 'floor' }));
@@ -462,7 +492,7 @@ function importLevel(project, lvl, l, k, warnings, mark = (e) => e) {
     const def = DEFAULTS[kind];
     const styles = OPENING_STYLES[kind];
     let style = o.style && styles[o.style] ? o.style : Object.keys(styles)[kind === 'window' ? 1 : 0];
-    if (kind === 'door' && /garage|гараж/.test(String(o.type || ''))) style = 'garage';
+    if (kind === 'door' && /garage|гараж/.test(String(o.type || '')) && !isGate({ kind, style })) style = 'garage';
     const width = clamp(num(o.width, def.width / k) * k, 0.3, Math.max(0.3, g.len - 0.1));
     let t = o.offset ?? o.t ?? o.position;
     t = t !== undefined ? num(t, g.len / 2 / k) * k : at ? projectOnSegment(at, g.a, g.b).along : g.len / 2;
@@ -482,6 +512,13 @@ function importLevel(project, lvl, l, k, warnings, mark = (e) => e) {
         flipSide: !!o.flipSide,
         flipHinge: !!o.flipHinge,
         ...(DESCENTS[o.descent] ? { descent: o.descent } : {}),
+        ...(kind === 'door' && DOOR_LEAVES[o.leaf] ? { leaf: o.leaf } : {}),
+        ...(kind === 'door' && isColor(o.color) ? { color: o.color } : {}),
+        ...(isColor(o.frameColor) ? { frameColor: o.frameColor } : {}),
+        ...(kind === 'door' && num(o.transom, 0) > 0 ? { transom: clamp(num(o.transom, 0) * k, 0, 1.5) } : {}),
+        ...(kind === 'door' && SIDELIGHTS[o.sidelight] && o.sidelight !== 'none' ? { sidelight: o.sidelight } : {}),
+        ...(kind === 'window' && o.grid === true ? { grid: true } : {}),
+        ...(kind === 'window' && o.arched === true ? { arched: true } : {}),
       }), o),
     );
   }
@@ -509,6 +546,9 @@ function importLevel(project, lvl, l, k, warnings, mark = (e) => e) {
     st.flip = !!s.flip;
     if (STAIR_STYLES[s.style]) st.style = s.style;
     if (RAILINGS[s.railing]) st.railing = s.railing;
+    if (RAIL_STYLES[s.railStyle]) st.railStyle = s.railStyle;
+    if (num(s.railHeight, 0) > 0) st.railHeight = clamp(num(s.railHeight, 0.9) * k, 0.5, 1.5);
+    if (isColor(s.railColor)) st.railColor = s.railColor;
     if (isColor(s.color)) st.color = s.color;
     project.stairs.push(mark(st, s));
   }

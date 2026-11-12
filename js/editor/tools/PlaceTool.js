@@ -2,6 +2,7 @@
  * Размещение мебели, объектов участка и лестниц. Превью следует за курсором,
  * мебель «спинкой» прилипает к ближайшей стене. R — повернуть на 90°, клик — поставить.
  */
+import { snapToFence } from '../../geometry/fence.js';
 import { Tool } from './Tool.js';
 import { THEME } from '../render/theme.js';
 import { createItem, createStair } from '../../model/factories.js';
@@ -88,6 +89,15 @@ export class PlaceTool extends Tool {
         const rot = surf && slopeRotation(surf);
         if (rot != null) obj.rotation = Math.round(rot * 10) / 10;
         obj._onRoof = !!surf;
+      }
+      if (catalogItem(obj.type)?.fenceGate && !e.alt) {
+        // ворота и калитка встают на линию забора
+        const sn = snapToFence(this.project, p, obj.w);
+        if (sn) {
+          Object.assign(obj, { x: sn.x, y: sn.y, rotation: sn.rotation, _snapped: true });
+          this.align = { labels: ['в линию забора'], guides: [], dims: [] };
+          return obj;
+        }
       }
       if (catalogItem(obj.type)?.wallSnap && !e.alt) {
         const sn = snapToWall(this.editor, p, obj.d, obj.w);

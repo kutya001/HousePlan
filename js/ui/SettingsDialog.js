@@ -108,6 +108,21 @@ export class SettingsDialog {
           (v) => app.state.setSetting('walkSpawn', v),
         ),
       ),
+      h(
+        'section',
+        {},
+        h('h3', {}, 'Графика 3D'),
+        seg(
+          [
+            ['low', 'Быстрая'],
+            ['medium', 'Обычная'],
+            ['high', 'Высокая'],
+          ],
+          st.quality || 'medium',
+          (v) => app.state.setSetting('quality', v),
+        ),
+        h('p', { class: 'muted small' }, '«Быстрая» — для слабых телефонов: без отражений и рельефа, простые тени. «Высокая» — чёткие мягкие тени и полное разрешение экрана.'),
+      ),
       ...TOGGLES.map(([title, rows]) => h('section', {}, h('h3', {}, title), ...rows.map(([k, l]) => toggle(k, l)))),
       h(
         'section',

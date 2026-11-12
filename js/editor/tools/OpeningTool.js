@@ -11,6 +11,7 @@ import { findWallForOpening } from '../placement.js';
 import { drawOpening, openingFrame } from '../render/drawOpenings.js';
 import { drawOpeningSnap } from '../smartSnap.js';
 import { dot, sub } from '../../core/geometry.js';
+import { DOOR_LEAF_NAMES, DOOR_SIZE, isGate } from '../../model/openings.js';
 
 const HINTS = {
   door: 'Наведите на стену и кликните. Дверь прилипает к центру стены, к углу (10 см) и к оси соседних проёмов. Сторона открывания — по курсору, X — петли. Alt — без привязок.',
@@ -28,9 +29,10 @@ export class OpeningTool extends Tool {
     this.hint = HINTS[kind];
     const d = DEFAULTS[kind];
     const styles = OPENING_STYLES[kind];
-    this.settings = { style: Object.keys(styles)[kind === 'window' ? 1 : 0], width: d.width, height: d.height, sill: d.sill, flipHinge: false };
+    this.settings = { style: Object.keys(styles)[kind === 'window' ? 1 : 0], width: d.width, height: d.height, sill: d.sill, flipHinge: false, leaf: 'solid', grid: false };
     this.options = [
       ...(Object.keys(styles).length > 1 ? [{ key: 'style', label: 'Вид', type: 'select', options: styles }] : []),
+      ...(kind === 'door' ? [{ key: 'leaf', label: 'Полотно', type: 'select', options: DOOR_LEAF_NAMES }] : []),
       { key: 'width', label: 'Ширина', type: 'number', min: 0.3, max: 8, step: 0.05, unit: 'м' },
       { key: 'height', label: 'Высота', type: 'number', min: 0.3, max: 5, step: 0.05, unit: 'м' },
       ...(kind === 'window' ? [{ key: 'sill', label: 'Подоконник', type: 'number', min: 0, max: 3, step: 0.05, unit: 'м' }] : []),
@@ -41,8 +43,10 @@ export class OpeningTool extends Tool {
   onOptionChange(key, value) {
     this.settings[key] = value;
     if (key === 'style' && this.kind === 'door') {
-      const preset = { single: [0.9, 2.1], double: [1.4, 2.1], sliding: [1.6, 2.1], garage: [2.8, 2.3] }[value];
+      const preset = DOOR_SIZE[value];
       if (preset) [this.settings.width, this.settings.height] = preset;
+      // раздвижная по умолчанию стеклянная, остальные — глухие
+      this.settings.leaf = value === 'sliding' ? 'glass' : this.settings.leaf === 'glass' ? 'solid' : this.settings.leaf;
       this.app.bus.emit('tool:options-refresh');
     }
     if (key === 'style' && this.kind === 'window' && value === 'panoramic') {
@@ -79,6 +83,7 @@ export class OpeningTool extends Tool {
       t: found.t,
       flipSide: !side,
       flipHinge: s.flipHinge,
+      ...(this.kind === 'door' && !isGate({ kind: 'door', style: s.style }) ? { leaf: s.leaf } : {}),
     });
     this.preview = { g: found.g, o, ok: found.ok && s.width < found.g.len - 0.1, snap: found.snap };
     this.render();

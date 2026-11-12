@@ -94,7 +94,10 @@ export const OPENING_STYLES = {
     single: 'Одностворчатая',
     double: 'Двустворчатая',
     sliding: 'Раздвижная',
-    garage: 'Гаражные ворота',
+    fold: 'Складная (гармошка)',
+    garage: 'Ворота секционные',
+    garage_swing: 'Ворота распашные',
+    garage_roll: 'Ворота рулонные (рольставни)',
   },
   window: {
     single: 'Одностворчатое',
@@ -104,6 +107,7 @@ export const OPENING_STYLES = {
   },
   arch: {
     open: 'Проём без двери',
+    arched: 'Арка',
   },
 };
 

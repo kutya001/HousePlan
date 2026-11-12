@@ -9,8 +9,9 @@ import { pointInPolygon } from '../../core/geometry.js';
 import { levelBelow, getLevel, levelWallHeight, isBasement } from '../../model/project.js';
 import { basementShapes } from '../../geometry/excavation.js';
 import { computeWallGeometry } from '../../geometry/wallGeometry.js';
-import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, STRINGER_D, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
+import { stairRails, GUARD_HEIGHT, STRINGER_D, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
 import { railingMesh } from './railing.js';
+import { railLook } from '../../model/railings.js';
 import { foundationOf } from '../../model/foundation.js';
 
 /** Подъём чистого пола над отметкой этажа в 3D — против мерцания совпадающих граней. */
@@ -89,7 +90,8 @@ export function buildStairs(project, levelId, base) {
     // над этой (марш в марш), не должна оставлять свои перила внутри неё
     const rails = stairRails(s, lay, wallPolys(project, levelId), null, { blocked: stairFootprintsAbove(project, s) });
     if (rails.sides.length) {
-      group.add(railingMesh(rails.sides.map((l) => l.map((p) => ({ ...p, h: base + p.h }))), RAIL_HEIGHT, { kind: 'stair', id: s.id }));
+      const look = railLook(s);
+      group.add(railingMesh(rails.sides.map((l) => l.map((p) => ({ ...p, h: base + p.h }))), look.height, { kind: 'stair', id: s.id }, look));
     }
   }
   return group;
@@ -105,7 +107,9 @@ export function buildStairGuards(project, levelId, base) {
     const lay = stairLayout(s, stairRise3D(project, s));
     // лестница этого этажа может стоять прямо над проёмом — забор сквозь неё не ставим
     const { guards } = stairRails(s, lay, [], upper, { blocked: stairFootprintsOverOpening(project, levelId, lay.outline) });
-    if (guards.length) group.add(railingMesh(guards.map((l) => l.map((p) => ({ ...p, h: base + FLOOR_LIFT }))), GUARD_HEIGHT, { kind: 'stair', id: s.id }));
+    // ограждение проёма — в стиле перил своей лестницы, не ниже 0,95 м
+    const look = railLook(s);
+    if (guards.length) group.add(railingMesh(guards.map((l) => l.map((p) => ({ ...p, h: base + FLOOR_LIFT }))), Math.max(GUARD_HEIGHT, look.height), { kind: 'stair', id: s.id }, look));
   }
   return group;
 }

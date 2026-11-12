@@ -10,6 +10,9 @@ import { buildScene, disposeTree, applyCutaway, isShown } from './SceneBuilder.j
 import { siteGeo, solarPosition, azimuthVector } from '../geometry/sun.js';
 import { highlighted } from './materials.js';
 import { Lamps } from './lamps.js';
+import { EditCard } from './EditCard.js';
+import { Sky } from './sky.js';
+import { setQuality } from './materials.js';
 import { onModelLoaded } from './models.js';
 import { levelElevation, getEntity, SITE_LEVEL, groundLevel } from '../model/project.js';
 
@@ -25,7 +28,10 @@ export class View3D {
     // на телефонах ограничиваем плотность — плавнее и экономнее
     renderer.setPixelRatio(Math.min(app.state.coarse ? 1.5 : 2, window.devicePixelRatio || 1));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // кинематографичная передача яркости: светлые стены не «выгорают», тени глубже
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
     renderer.domElement.className = 'view3d-canvas';
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
@@ -35,7 +41,8 @@ export class View3D {
     scene.fog = new THREE.Fog('#dde7ee', 120, 420);
     this.scene = scene;
 
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+    this.sky = new Sky(renderer, scene);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
     this.camera.position.set(22, 18, 26);
 
     const hemi = new THREE.HemisphereLight('#f4f8fc', '#8c927f', 1.3);
@@ -64,6 +71,7 @@ export class View3D {
     this.doors = new DoorAnimator();
     this.character = new CharacterMode(this);
     this.lamps = new Lamps(this);
+    this.edit = new EditCard(app, this);
     // своя модель догрузилась из хранилища — пересобрать сцену
     onModelLoaded(() => this.invalidate(60));
 
@@ -86,18 +94,49 @@ export class View3D {
         this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
         this.invalidate();
       }
+      if (key === 'quality') {
+        this.applyQuality();
+        this.invalidate();
+      }
     });
     bus.on('selection:changed', () => this._applyHighlight());
 
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(container);
     this.renderer.shadowMap.enabled = !!app.state.settings.shadows;
+    this.applyQuality();
     this.applySun();
     this._loop = this._loop.bind(this);
   }
 
+  /**
+   * Качество графики (Настройки): «быстрое» — для слабых телефонов, «высокое» — чёткие
+   * тени и полное разрешение. Среднее — по умолчанию.
+   */
+  applyQuality() {
+    const q = this.app.state.settings.quality || 'medium';
+    const coarse = this.app.state.coarse;
+    const dpr = window.devicePixelRatio || 1;
+    const cap = q === 'low' ? 1 : q === 'high' ? (coarse ? 2 : 2.5) : coarse ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(cap, dpr));
+    this.renderer.shadowMap.type = q === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+    const size = q === 'low' ? 1024 : q === 'high' ? 4096 : 2048;
+    const shadow = this.sun.shadow;
+    if (shadow.mapSize.x !== size) {
+      shadow.mapSize.set(size, size);
+      shadow.map?.dispose();
+      shadow.map = null;
+    }
+    shadow.radius = q === 'high' ? 2.5 : 1.5;
+    this.sky.setEnv(q !== 'low');
+    setQuality(q);
+    this.renderer.shadowMap.needsUpdate = true;
+    if (this.visible) this.resize();
+  }
+
   setVisible(v) {
     this.visible = v;
+    this.edit?.render();
     if (v) {
       this.resize();
       if (this.dirty) this.rebuild();
@@ -164,6 +203,7 @@ export class View3D {
     this._applyHighlight();
     this.doors.attach(this.root);
     this.character.onProjectChanged();
+    this.edit.onRebuilt();
     // первый дом в пустом проекте — показать его крупно
     const hasWalls = project.walls.length > 0;
     if (hasWalls && this._hadWalls === false) this.frame();
@@ -248,6 +288,10 @@ export class View3D {
     this.hemi.color.lerpColors(new THREE.Color('#8fa6d6'), new THREE.Color('#f4f8fc'), 1 - this.night);
     this.scene.background = sky;
     this.scene.fog.color.copy(sky);
+    // купол неба: у горизонта — цвет дымки, к зениту — синева (ночью — почти чёрный)
+    const day = 1 - this.night;
+    const zenith = new THREE.Color('#070b14').lerp(new THREE.Color('#5b95d6'), day);
+    this.sky.set({ zenith, horizon: sky, ground: ground.clone().lerp(sky, 0.35), sunDir: this._sunDir, day });
     if (this.root) this._fitShadow();
     this.lamps?.update(this.night);
     this.app.bus.emit('sun:changed', { info: this.sunInfo, night: this.night });
@@ -326,6 +370,8 @@ export class View3D {
       this._fitDepth();
     }
     this.lamps.tick();
+    this.edit.tick();
+    this.sky.follow(this.camera);
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);
   }
@@ -360,6 +406,10 @@ export class View3D {
   }
 
   keyDown(ev) {
+    if (ev.code === 'Escape' && this.edit.move) {
+      this.edit.cancelMove();
+      return true;
+    }
     return this.character.keyDown(ev);
   }
 
@@ -405,6 +455,8 @@ export class View3D {
 
   _pick(ev) {
     if (!this.root) return;
+    // объект «в руке»: клик ставит его на место
+    if (this.edit.move) return this.edit.confirmMove();
     const { state, project } = this.app;
     const ref = this.pickRef(ev);
     if (ref) {

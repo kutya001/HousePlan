@@ -3,6 +3,7 @@
  * Каждое обозначение рисуется в локальных координатах объекта:
  * центр в (0,0), ширина по X, глубина по Y, «спинка» — сторона −Y.
  */
+import { catalogItem } from '../../model/catalog.js';
 import { THEME, tint, shade, itemFill } from './theme.js';
 import { MEP_SYMBOLS, drawMepSymbol } from './symbolsMep.js';
 
@@ -138,6 +139,73 @@ const SYMBOLS = {
       line(ctx, -w / 2 - 0.05, y, -w / 2, y);
       line(ctx, w / 2, y, w / 2 + 0.05, y);
     }
+  },
+  // ограждение: линия со стойками
+  railing(ctx, w) {
+    const lw = ctx.lineWidth;
+    ctx.lineWidth = lw * 2.2;
+    line(ctx, -w / 2, 0, w / 2, 0);
+    ctx.lineWidth = lw;
+    const n = Math.max(1, Math.round(w / 1.2));
+    for (let i = 0; i <= n; i++) {
+      const x = -w / 2 + (w * i) / n;
+      ctx.beginPath();
+      ctx.rect(x - 0.04, -0.04, 0.08, 0.08);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  // ворота участка: столбы, створки и дуги открывания (откатные — стрелка вдоль забора)
+  gate(ctx, w, d, color, slide = false) {
+    for (const x of [-w / 2 + 0.06, w / 2 - 0.06]) {
+      ctx.beginPath();
+      ctx.rect(x - 0.07, -0.07, 0.14, 0.14);
+      fs(ctx);
+    }
+    const lw = ctx.lineWidth;
+    const half = w / 2 - 0.12;
+    if (slide) {
+      ctx.lineWidth = lw * 2.4;
+      line(ctx, -half, 0, half, 0);
+      ctx.lineWidth = lw;
+      ctx.save();
+      ctx.setLineDash([0.18, 0.12]);
+      line(ctx, -half, 0.22, -half - 2 * half * 0.9, 0.22);
+      ctx.restore();
+      return;
+    }
+    for (const sx of [-1, 1]) {
+      ctx.lineWidth = lw * 2;
+      line(ctx, sx * half, 0, sx * half, half);
+      ctx.lineWidth = lw;
+      ctx.save();
+      ctx.setLineDash([0.12, 0.1]);
+      ctx.beginPath();
+      ctx.arc(sx * half, 0, half, sx > 0 ? Math.PI / 2 : 0, sx > 0 ? Math.PI : Math.PI / 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+  gate_slide(ctx, w, d, color) {
+    SYMBOLS.gate(ctx, w, d, color, true);
+  },
+  wicket(ctx, w) {
+    for (const x of [-w / 2 + 0.05, w / 2 - 0.05]) {
+      ctx.beginPath();
+      ctx.rect(x - 0.06, -0.06, 0.12, 0.12);
+      fs(ctx);
+    }
+    const lw = ctx.lineWidth;
+    const L = w - 0.2;
+    ctx.lineWidth = lw * 2;
+    line(ctx, -L / 2, 0, -L / 2, L);
+    ctx.lineWidth = lw;
+    ctx.save();
+    ctx.setLineDash([0.12, 0.1]);
+    ctx.beginPath();
+    ctx.arc(-L / 2, 0, L, 0, Math.PI / 2);
+    ctx.stroke();
+    ctx.restore();
   },
   // дымоход: стенки и канал с крестом
   chimney(ctx, w, d) {
@@ -706,11 +774,12 @@ export function drawItemSymbol(ctx, item, lineWidth, { alpha = 1, px = null } = 
   ctx.lineWidth = lineWidth;
   ctx.fillStyle = itemFill(item.color || '#c9c3b8');
   ctx.strokeStyle = THEME.itemStroke;
-  const fn = SYMBOLS[item.type] || SYMBOLS.box;
+  // у видов одного предмета (навесы, козырьки, ограждения, ворота) значок общий
+  const fn = SYMBOLS[item.type] || SYMBOLS[catalogItem(item.type)?.family] || SYMBOLS.box;
   fn(ctx, item.w, item.d, item.color || '#8dbb6e');
   ctx.restore();
 }
 
 export function hasSymbol(type) {
-  return !!SYMBOLS[type] || !!MEP_SYMBOLS[type];
+  return !!SYMBOLS[type] || !!MEP_SYMBOLS[type] || !!SYMBOLS[catalogItem(type)?.family];
 }

@@ -56,19 +56,20 @@ export function buildWalls(project, levelId, base, { porch = false } = {}) {
     const ops = byWall.get(w.id) || [];
     const parts = wallPieces3D(g, ops, h, { overlap: 0.004 }).map((p) => piece(p.poly, base + p.y0, base + p.y1));
     const geo = mergeGeometries(parts);
+    // отделка сторон стены — и для самой стены, и для углов над арочными проёмами
+    const type = wallType(w);
+    const side = sides.get(w.id);
+    const below = underground && w.kind === 'exterior';
+    const fa = wallSideFinish(w, 'A', { ...ctx, outside: side.A.outside, underground: below });
+    const fb = wallSideFinish(w, 'B', { ...ctx, outside: side.B.outside, underground: below });
+    const surface = (f) =>
+      f.glass ? mat(f.color, { roughness: 0.08, metalness: 0.1, opacity: f.glass }) : mat(f.color, { roughness: f.finish === 'concrete' ? 0.95 : 0.85, map: f.tex || undefined });
     if (geo) {
       // стена — четыре поверхности: две стороны со своей отделкой, верхний срез (видно,
       // из чего сложена) и откосы проёмов с торцами
-      const type = wallType(w);
-      const side = sides.get(w.id);
-      const below = underground && w.kind === 'exterior';
-      const fa = wallSideFinish(w, 'A', { ...ctx, outside: side.A.outside, underground: below });
-      const fb = wallSideFinish(w, 'B', { ...ctx, outside: side.B.outside, underground: below });
       const inner = side.A.outside ? fb : fa; // откосы — как сторона в помещении
       const faces = splitWallFaces(geo, g.n.x, g.n.y);
       const ref = { kind: 'wall', id: w.id };
-      const surface = (f) =>
-        f.glass ? mat(f.color, { roughness: 0.08, metalness: 0.1, opacity: f.glass }) : mat(f.color, { roughness: f.finish === 'concrete' ? 0.95 : 0.85, map: f.tex || undefined });
       const add = (part, material, cast = true) => {
         if (!part) return null;
         const m = mesh(TEX.on ? planarUV(part) : part, material, ref, { cast });
@@ -83,7 +84,8 @@ export function buildWalls(project, levelId, base, { porch = false } = {}) {
       const host = first || group.children[group.children.length - 1];
       if (host) host.userData.edgesFrom = piece(g.poly, base, base + h);
     }
-    for (const o of ops) group.add(buildOpening(g, o, base, h));
+    const wallMats = { a: surface(fa), b: surface(fb) };
+    for (const o of ops) group.add(buildOpening(g, o, base, h, wallMats));
   }
   // крыльцо у наружных дверей, если пол поднят на цоколь
   if (porch) {

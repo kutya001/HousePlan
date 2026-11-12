@@ -18,12 +18,15 @@ import {
   DEFAULTS,
   ROOM_NAMES,
 } from './defaults.js';
-import { catalogItem } from './catalog.js';
+import { catalogItem, familyOptions } from './catalog.js';
 import { LAYERS, itemLayer } from './layers.js';
 import { FACADE_FINISHES, roofCover, roofCoverOptions, setRoofCover } from './finishes.js';
 import { roofPeak, isMansardRoof, MANSARD, HALF_HIP } from '../geometry/roofGeometry.js';
 import { setRoofType } from './factories.js';
 import { foundationOf, FOUNDATION_TYPES, FOUNDATION_NAMES, PLINTH_NAMES } from './foundation.js';
+import { DOOR_LEAF_NAMES, DOOR_SIZE, SIDELIGHTS, doorLeaf, isGate, openingLook } from './openings.js';
+import { FENCE_NAMES, fenceOf, setFenceSide } from './fence.js';
+import { RAIL_STYLE_NAMES, railLook } from './railings.js';
 import { roofSurfaceAt, slopeAngle } from '../geometry/roofSurface.js';
 import { roomNetArea } from '../geometry/roomDetect.js';
 import { DESCENTS, canHaveDescent } from '../geometry/cellarEntry.js';
@@ -202,13 +205,34 @@ export const SCHEMAS = {
       },
       rebuild: true,
     }),
-    { type: 'select', label: 'Конструкция', options: (o) => OPENING_STYLES[o.kind] || {}, get: (o) => o.style, set: (o, v) => (o.style = v) },
+    {
+      type: 'select',
+      label: 'Конструкция',
+      options: (o) => OPENING_STYLES[o.kind] || {},
+      get: (o) => o.style,
+      // ворота и гармошка шире обычной двери: при смене конструкции подставляем её размер
+      set: (o, v) => {
+        const was = isGate(o) || o.style === 'fold';
+        o.style = v;
+        const now = isGate(o) || v === 'fold';
+        if (o.kind === 'door' && (was || now) && DOOR_SIZE[v]) [o.width, o.height] = DOOR_SIZE[v];
+      },
+      rebuild: true,
+      bulk: true,
+    },
+    { type: 'select', label: 'Полотно', options: DOOR_LEAF_NAMES, get: (o) => doorLeaf(o), set: (o, v) => (o.leaf = v), visible: (o) => o.kind === 'door' && !isGate(o), bulk: true },
     num('width', 'Ширина', { min: 0.3, max: 8 }),
     num('height', 'Высота', { min: 0.3, max: 5 }),
     num('sill', 'От пола', { min: 0, max: 3, hint: 'Высота подоконника или порога' }),
     num('t', 'Центр от начала стены', { min: 0, max: 200 }),
-    check('flipSide', 'Открывание на другую сторону'),
-    check('flipHinge', 'Петли с другой стороны'),
+    { ...check('flipSide', 'Открывание на другую сторону'), visible: (o) => o.kind === 'door' },
+    { ...check('flipHinge', 'Петли с другой стороны'), visible: (o) => o.kind === 'door' && !isGate(o) && o.style !== 'double' && o.style !== 'sliding' },
+    num('transom', 'Фрамуга над дверью', { min: 0, max: 1.5, step: 0.05, hint: 'Остеклённая часть над полотном; 0 — без фрамуги. Входит в высоту проёма', get: (o) => o.transom ?? 0, visible: (o) => o.kind === 'door' && !isGate(o), bulk: true }),
+    { type: 'select', label: 'Остекление сбоку', options: SIDELIGHTS, get: (o) => (SIDELIGHTS[o.sidelight] ? o.sidelight : 'none'), set: (o, v) => (o.sidelight = v), visible: (o) => o.kind === 'door' && !isGate(o), bulk: true },
+    { ...check('grid', 'Раскладка (шпросы)'), visible: (o) => o.kind === 'window', bulk: true },
+    { ...check('arched', 'Арочный верх'), visible: (o) => o.kind === 'window', bulk: true },
+    color('color', (o) => (isGate(o) ? 'Цвет ворот' : 'Цвет полотна'), { get: (o) => openingLook(o).leafColor, allowReset: true, visible: (o) => o.kind === 'door' && openingLook(o).glass !== 'full', bulk: true }),
+    color('frameColor', (o) => (o.kind === 'window' ? 'Цвет рамы' : o.kind === 'arch' ? 'Цвет наличника' : 'Цвет коробки'), { get: (o) => openingLook(o).frameColor, allowReset: true, bulk: true }),
     {
       type: 'select',
       label: 'Спуск с улицы',
@@ -250,7 +274,12 @@ export const SCHEMAS = {
       options: RAILINGS,
       get: (s) => (RAILINGS[s.railing] ? s.railing : 'auto'),
       set: (s, v) => (s.railing = v),
+      rebuild: true,
+      bulk: true,
     },
+    { type: 'select', label: 'Стиль перил', options: RAIL_STYLE_NAMES, get: (s) => railLook(s).style, set: (s, v) => (s.railStyle = v), visible: (s) => s.railing !== 'none', bulk: true },
+    num('railHeight', 'Высота перил', { min: 0.5, max: 1.5, step: 0.05, get: (s) => railLook(s).height, visible: (s) => s.railing !== 'none', bulk: true }),
+    color('railColor', 'Цвет перил', { get: (s) => railLook(s).rail, allowReset: true, visible: (s) => s.railing !== 'none', bulk: true }),
     num('width', 'Ширина', { min: 0.6, max: 6 }),
     num('length', 'Длина', { min: 0.6, max: 10, visible: (s) => s.shape !== 'spiral' }),
     num('flight', 'Ширина марша', { min: 0.6, max: 2, visible: (s) => s.shape === 'L' || s.shape === 'U' }),
@@ -262,6 +291,24 @@ export const SCHEMAS = {
   ],
   item: [
     readonly('Объект', (i) => i.name || catalogItem(i.type)?.name || i.type),
+    {
+      type: 'select',
+      label: 'Вид',
+      options: (i) => familyOptions(i.type) || {},
+      get: (i) => i.type,
+      // другой вид того же предмета: место и размеры остаются, цвет — если его не меняли
+      set: (i, v) => {
+        const was = catalogItem(i.type);
+        const now = catalogItem(v);
+        if (!now) return;
+        if (!i.color || i.color.toLowerCase() === String(was?.color).toLowerCase()) i.color = now.color;
+        if (was && Math.abs(i.h - was.h) < 1e-6) i.h = now.h;
+        i.type = v;
+      },
+      visible: (i) => !!familyOptions(i.type),
+      rebuild: true,
+      bulk: true,
+    },
     num('w', 'Ширина', { min: 0.05, max: 30 }),
     num('d', 'Глубина', { min: 0.05, max: 30 }),
     num('h', 'Высота', { min: 0.01, max: 20 }),
@@ -314,14 +361,47 @@ export const SCHEMAS = {
   ],
   site: [
     readonly('Площадь', (s) => `${fmtArea(polygonArea(s.boundary))} · ${fmtSotki(polygonArea(s.boundary))}`),
-    { type: 'checkbox', label: 'Забор', get: (s) => !!s.fence.enabled, set: (s, v) => (s.fence.enabled = v) },
+    { type: 'checkbox', label: 'Забор', get: (s) => !!s.fence.enabled, set: (s, v) => (s.fence.enabled = v), rebuild: true },
+    { type: 'select', label: 'Вид забора', options: FENCE_NAMES, get: (s) => fenceOf(s).type, set: (s, v) => (s.fence.type = v), visible: (s) => s.fence.enabled },
     {
       ...num('height', 'Высота забора', { min: 0.3, max: 4 }),
       get: (s) => s.fence.height,
       set: (s, v) => (s.fence.height = v),
       visible: (s) => s.fence.enabled,
     },
-    { type: 'color', label: 'Цвет забора', get: (s) => s.fence.color, set: (s, v) => (s.fence.color = v), visible: (s) => s.fence.enabled },
+    { type: 'color', label: 'Цвет забора', get: (s) => fenceOf(s).color, set: (s, v) => (s.fence.color = v), allowReset: true, visible: (s) => s.fence.enabled },
+    // отдельная сторона: свой вид, высота или без забора
+    {
+      type: 'select',
+      label: 'Сторона забора',
+      hint: 'Выберите сторону участка, чтобы задать ей свой забор',
+      options: (s) => Object.fromEntries(s.boundary.map((_, i) => [i, sideName(s, i)])),
+      get: (s) => String(Math.min(fenceSideIndex, s.boundary.length - 1)),
+      set: (s, v) => (fenceSideIndex = Number(v)),
+      visible: (s) => s.fence.enabled,
+      rebuild: true,
+    },
+    {
+      type: 'select',
+      label: 'На этой стороне',
+      options: { same: 'Как у всего забора', ...FENCE_NAMES, off: 'Без забора' },
+      get: (s) => {
+        const side = s.fence.sides?.[sideIndex(s)] || {};
+        return side.off ? 'off' : FENCE_NAMES[side.type] ? side.type : 'same';
+      },
+      set: (s, v) => setFenceSide(s, sideIndex(s), v === 'off' ? { off: true, type: null } : { off: false, type: v === 'same' ? null : v }),
+      visible: (s) => s.fence.enabled,
+      rebuild: true,
+    },
+    {
+      ...num('sideHeight', 'Высота на этой стороне', { min: 0.3, max: 4 }),
+      placeholder: 'как у всего',
+      allowEmpty: true,
+      get: (s) => s.fence.sides?.[sideIndex(s)]?.height ?? null,
+      set: (s, v) => setFenceSide(s, sideIndex(s), { height: v }),
+      visible: (s) => s.fence.enabled && !s.fence.sides?.[sideIndex(s)]?.off,
+    },
+    { ...readonly('Ворота и калитка', () => 'в каталоге → «Участок»: встают на линию забора'), visible: (s) => s.fence.enabled },
     {
       ...num('north', 'Север на плане', { min: -180, max: 180, step: 5, unit: '°', hint: '0 — север вверху плана, 90 — справа. Стрелка севера — в углу плана' }),
       get: (s) => siteGeo(s).north,
@@ -362,6 +442,23 @@ export const LEVEL_SCHEMA = [
   num('slab', 'Толщина перекрытия', { min: 0.1, max: 0.6 }),
   { type: 'readonly', label: 'Отметка пола', get: (l, p) => `${fmtElev(levelElevation(p, l.id))} м` },
 ];
+
+/** Сторона забора, выбранная в свойствах участка (состояние панели, в проект не попадает). */
+let fenceSideIndex = 0;
+const sideIndex = (s) => Math.min(fenceSideIndex, s.boundary.length - 1);
+
+/** «Сторона 2 — справа, 40,0 м»: где сторона на плане и её длина. */
+function sideName(site, i) {
+  const b = site.boundary;
+  const a = b[i];
+  const c = b[(i + 1) % b.length];
+  const cx = b.reduce((sum, p) => sum + p.x, 0) / b.length;
+  const cy = b.reduce((sum, p) => sum + p.y, 0) / b.length;
+  const dx = (a.x + c.x) / 2 - cx;
+  const dy = (a.y + c.y) / 2 - cy;
+  const where = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'справа' : 'слева') : dy < 0 ? 'сверху' : 'снизу';
+  return `Сторона ${i + 1} — ${where}, ${Math.hypot(c.x - a.x, c.y - a.y).toFixed(1).replace('.', ',')} м`;
+}
 
 /** Нижний этаж — подвал: фундаментом служат его стены и плита, вид фундамента не выбирают. */
 const onBasement = (p) => isBasement(p.levels[0]);

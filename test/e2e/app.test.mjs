@@ -34,6 +34,9 @@ before(async () => {
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem('houseplan.view.v1', 'split');
+    // тест идёт на программной отрисовке: «быстрая» графика (без отражений и мягких теней) —
+    // сценарий проверяет поведение, а не картинку
+    localStorage.setItem('houseplan.settings.v1', JSON.stringify({ quality: 'low' }));
   });
   await page.reload();
   await page.waitForFunction(() => window.houseplan?.project);

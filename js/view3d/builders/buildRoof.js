@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { extrudePolygon, prism3D, mergeGeometries, mesh, planarUV } from '../meshUtils.js';
 import { mat, TEX } from '../materials.js';
 import { COLORS } from '../../model/defaults.js';
-import { roofGeometry } from '../../geometry/roofGeometry.js';
+import { roofGeometry, roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { roofGutters, GUTTER_R, PIPE_R } from '../../geometry/roofGutters.js';
 import { roofCover } from '../../model/finishes.js';
 import { insetPolygon } from '../../core/geometry.js';
@@ -69,6 +69,29 @@ export function buildRoof(project, roof) {
     const m = mesh(wg, facade, ref);
     m.userData.edges = true;
     group.add(m);
+  }
+
+  // коньки и рёбра: планка по стыку скатов (у перелома ломаной крыши стык без планки)
+  if (roof.type !== 'flat') {
+    const rp = roofPlanes(roof, H);
+    const caps = [];
+    for (const [a, b] of geo.plan.lines) {
+      const ha = roofHeightAt(rp, a);
+      const hb = roofHeightAt(rp, b);
+      if (!Number.isFinite(ha) || !Number.isFinite(hb)) continue;
+      // стык выпуклый (конёк, ребро), если кровля по обе стороны от него ниже
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const nx = (-(b.y - a.y) / L) * 0.3;
+      const ny = ((b.x - a.x) / L) * 0.3;
+      const mid = (ha + hb) / 2;
+      const side = (roofHeightAt(rp, { x: mx + nx, y: my + ny }) + roofHeightAt(rp, { x: mx - nx, y: my - ny })) / 2;
+      if (!(side < mid - 0.02)) continue;
+      caps.push(rod({ x: a.x, y: ha + 0.02, z: a.y }, { x: b.x, y: hb + 0.02, z: b.y }, 0.07, 8));
+    }
+    const cg = mergeGeometries(caps.filter(Boolean).map((g) => (g.index ? g.toNonIndexed() : g)));
+    if (cg) group.add(mesh(cg, mat(`#${new THREE.Color(color).multiplyScalar(0.72).getHexString()}`, { roughness: 0.6 }), ref));
   }
 
   const gut = buildGutters(project, roof, color);

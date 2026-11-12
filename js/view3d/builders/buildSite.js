@@ -1,4 +1,4 @@
-/** Земля, газон участка, зоны ландшафта и забор. */
+/** Земля, газон участка, зоны ландшафта; забор — в buildFence.js. */
 import * as THREE from 'three';
 import { extrudePolygon, mergeGeometries, mesh, box, planarUV } from '../meshUtils.js';
 import { mat, TEX } from '../materials.js';
@@ -7,6 +7,7 @@ import { COLORS, ZONE_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, dist, pointInPolygon, polygonsOverlap, subtractPolygons, segmentIntersect } from '../../core/geometry.js';
 import { excavationPits } from '../../geometry/excavation.js';
 import { cellarEntries, RAIL_H, PIT_CURB } from '../../geometry/cellarEntry.js';
+import { buildFence } from './buildFence.js';
 
 export function buildSite(project) {
   const group = new THREE.Group();
@@ -48,33 +49,7 @@ export function buildSite(project) {
 
   buildCellarEntries(project, group);
 
-  const fence = project.site.fence;
-  if (fence?.enabled) {
-    const h = fence.height || 1.8;
-    const posts = [];
-    const panels = [];
-    for (let i = 0; i < b.length; i++) {
-      const a = b[i];
-      const c = b[(i + 1) % b.length];
-      const L = dist(a, c);
-      if (L < 0.05) continue;
-      const ang = Math.atan2(c.y - a.y, c.x - a.x);
-      const n = Math.max(1, Math.round(L / 2.5));
-      for (let k = 0; k < n; k++) {
-        const t = k / n;
-        const g = box(0.08, h + 0.1, 0.08, a.x + (c.x - a.x) * t, 0, a.y + (c.y - a.y) * t);
-        posts.push(g);
-      }
-      const panel = box(L, h - 0.15, 0.025, 0, 0.1, 0);
-      panel.rotateY(-ang);
-      panel.translate((a.x + c.x) / 2, 0, (a.y + c.y) / 2);
-      panels.push(panel);
-    }
-    const pg = mergeGeometries(posts);
-    if (pg) group.add(mesh(pg, mat('#55504a')));
-    const panelGeo = mergeGeometries(panels);
-    if (panelGeo) group.add(mesh(panelGeo, mat(fence.color || COLORS.fence, { roughness: 0.6 }), { kind: 'site', id: 'site' }));
-  }
+  group.add(buildFence(project));
   return group;
 }
 

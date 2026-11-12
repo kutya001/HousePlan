@@ -18,7 +18,7 @@ import { stairLayout } from './stairGeometry.js';
 import { levelElevation, getLevel, levelWallHeight } from '../model/project.js';
 import { stairStyle, TREAD } from '../model/defaults.js';
 
-export const RAILINGS = { auto: 'Со свободных сторон', both: 'С обеих сторон', none: 'Без перил' };
+export const RAILINGS = { auto: 'Со свободных сторон', both: 'С обеих сторон', left: 'Только слева (по ходу вверх)', right: 'Только справа (по ходу вверх)', none: 'Без перил' };
 export const RAIL_HEIGHT = 0.9; // поручень над ступенью
 export const GUARD_HEIGHT = 0.95; // ограждение проёма над полом
 export const STRINGER_D = 0.24; // высота сечения косоура (общая с 3D-сборкой)
@@ -47,8 +47,10 @@ export function stairRails(stair, layout, wallPolys, upperWallPolys, opts = {}) 
   // пересекает ли ограждение [hBot, hTop] занятую область в точке p
   const hits = (p, hBot, hTop) =>
     blocked.some((b) => hBot < b.y1 - EPS && hTop > b.y0 + EPS && pointInPolygon(p, b.poly));
+  // «с обеих», «слева», «справа» — перила ставятся и вдоль стены; «авто» — только где свободно
+  const forced = mode !== 'auto';
   const free = (p, n, polys, hBot, hTop, hp = p) =>
-    mode === 'both' ||
+    forced ||
     (!polys.some((w) => pointInPolygon({ x: p.x + n.x * NEAR, y: p.y + n.y * NEAR }, w)) && !hits(hp, hBot, hTop));
   const steps = layout.steps;
 
@@ -87,6 +89,8 @@ export function stairRails(stair, layout, wallPolys, upperWallPolys, opts = {}) 
         [f.w0 + 0.03, -1],
         [f.w1 - 0.03, 1],
       ]) {
+        // сторона по ходу вверх: sgn = −1 — слева, +1 — справа
+        if ((mode === 'left' && sgn === 1) || (mode === 'right' && sgn === -1)) continue;
         const n = { x: f.v.x * sgn, y: f.v.y * sgn };
         const P = (u) => ({ x: f.d.x * u + f.v.x * w, y: f.d.y * u + f.v.y * w });
         const H = (u) => f.t0 + ((f.t1 - f.t0) * (u - f.u0)) / Math.max(1e-6, f.u1 - f.u0);

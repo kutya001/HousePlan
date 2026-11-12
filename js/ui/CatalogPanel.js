@@ -108,7 +108,12 @@ export class CatalogPanel {
   }
 
   _pick(type) {
-    this.app.editor.setTool('item', { type });
+    // в 3D на весь экран и в прогулке предмет ставится прямо в сцене — перед манекеном
+    const v = this.app.view3d;
+    if (v?.visible && (v.walking || this.app.state.viewMode === '3d')) {
+      v.edit.place(type);
+      if (this.app.state.compact) this.app.ui.side.close();
+    } else this.app.editor.setTool('item', { type });
     this.recent = [type, ...this.recent.filter((t) => t !== type)].slice(0, 8);
     try {
       localStorage.setItem(RECENT_KEY, JSON.stringify(this.recent));

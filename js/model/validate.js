@@ -21,6 +21,7 @@ import { stairStyle, TREAD } from './defaults.js';
 import { SITE_LEVEL, groundLevel, getLevel, levelElevation, levelWallHeight, levelBelow, levelAbove, wallHeight, isBasement, isAttic } from './project.js';
 import { roomWindowDirections } from '../geometry/orientation.js';
 import { roofSurfaceAt } from '../geometry/roofSurface.js';
+import { isGate } from './openings.js';
 
 const OPENING_LABEL = { door: 'Дверь', window: 'Окно', arch: 'Проём', opening: 'Проём' };
 
@@ -549,7 +550,7 @@ function checkDoors(project, level, geoms, rooms, items, shapes, stairs, lid, pu
   const porch = level === ground && levelElevation(project, lid) >= 0.12;
   for (const g of geoms.values()) {
     for (const o of project.openings) {
-      if (o.wallId !== g.wall.id || o.kind === 'window' || o.sill > 0.05 || o.style === 'garage') continue; // за воротами гаража стоит машина — так и задумано
+      if (o.wallId !== g.wall.id || o.kind === 'window' || o.sill > 0.05 || isGate(o)) continue; // за воротами гаража стоит машина — так и задумано
       const out = g.wall.kind === 'exterior' ? outsideSide(g, o, rooms, geoms) : 0;
       for (const side of [1, -1]) {
         const outside = out !== 0 && side === out;

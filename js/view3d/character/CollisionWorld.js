@@ -16,6 +16,9 @@ import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf, t
 import { levelElevation, wallHeight, levelBelow, levelTop, groundLevel, isBasement, SITE_LEVEL } from '../../model/project.js';
 import { excavationOutlines, inExcavation, basementShapes } from '../../geometry/excavation.js';
 import { cellarEntries, RAIL_H } from '../../geometry/cellarEntry.js';
+import { fenceRuns } from '../../geometry/fence.js';
+import { isFenceGate } from '../../model/fence.js';
+import { openingLook } from '../../model/openings.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairStyle, TREAD } from '../../model/defaults.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
@@ -69,8 +72,19 @@ export class CollisionWorld {
         for (const o of list) {
           const poly = clipWallRange(g, o.t - o.width / 2, o.t + o.width / 2);
           const top = Math.min(o.sill + o.height, h);
-          if (o.kind === 'window') this._add(poly, base + o.sill, base + top, { kind: 'glass', ref: { kind: 'opening', id: o.id } });
-          else if (o.kind === 'door') this._add(poly, base + o.sill, base + top, { kind: 'door', doorId: o.id, ref: { kind: 'opening', id: o.id } });
+          const ref = { kind: 'opening', id: o.id };
+          if (o.kind === 'window') this._add(poly, base + o.sill, base + top, { kind: 'glass', ref });
+          else if (o.kind === 'door') {
+            // открывается только сама дверь: боковое остекление и фрамуга — глухое стекло
+            const look = openingLook(o);
+            const s0 = o.t - o.width / 2;
+            const s1 = o.t + o.width / 2;
+            const doorTop = top - look.transom;
+            this._add(clipWallRange(g, s0 + look.side.left, s1 - look.side.right), base + o.sill, base + doorTop, { kind: 'door', doorId: o.id, ref });
+            if (look.side.left) this._add(clipWallRange(g, s0, s0 + look.side.left), base + o.sill, base + doorTop, { kind: 'glass', ref });
+            if (look.side.right) this._add(clipWallRange(g, s1 - look.side.right, s1), base + o.sill, base + doorTop, { kind: 'glass', ref });
+            if (look.transom > 0) this._add(poly, base + doorTop, base + top, { kind: 'glass', ref });
+          }
           // порог под дверью: пол между комнатами не обрывается в толще стены
           if (o.kind !== 'window' && o.sill < 0.05) {
             if (i === 0 && g.wall.kind === 'exterior' && base > 0.01) this._add(poly, 0, base, { kind: 'floor', noSide: true });
@@ -126,35 +140,38 @@ export class CollisionWorld {
       const top = z.material === 'water' ? 0.015 : z.material === 'deck' ? 0.12 : 0.03;
       this._add(z.points, 0, top, { kind: 'floor', noSide: true, ref: { kind: 'zone', id: z.id } });
     }
-    for (const it of project.items.filter((x) => x.levelId === SITE_LEVEL)) this._addItem(it, 0);
+    for (const it of project.items.filter((x) => x.levelId === SITE_LEVEL && !isFenceGate(x))) this._addItem(it, 0);
     // приямки входов в подвал: площадка и ступени — опора, стенки с ограждением — препятствия
     for (const e of cellarEntries(project)) {
       this._add(e.landing.poly, e.base - 0.12, e.base, { kind: 'porch', noSide: true });
       for (const st of e.steps) this._add(st.poly, e.base - 0.12, st.top, { kind: 'porch' });
       for (const w of e.walls) this._add(w.poly, w.y0, w.rail ? RAIL_H : w.y1, { kind: 'wall' });
     }
-    const fence = project.site.fence;
-    const b = project.site.boundary;
-    if (fence?.enabled && b.length > 1) {
-      for (let i = 0; i < b.length; i++) {
-        const a = b[i];
-        const c = b[(i + 1) % b.length];
-        const L = Math.hypot(c.x - a.x, c.y - a.y);
-        if (L < 0.05) continue;
-        const nx = (-(c.y - a.y) / L) * 0.05;
-        const ny = ((c.x - a.x) / L) * 0.05;
-        this._add(
-          [
-            { x: a.x + nx, y: a.y + ny },
-            { x: c.x + nx, y: c.y + ny },
-            { x: c.x - nx, y: c.y - ny },
-            { x: a.x - nx, y: a.y - ny },
-          ],
-          0,
-          fence.height || 1.8,
-          { kind: 'fence' },
-        );
-      }
+    // забор — по пролётам (в воротах разрыв); сами ворота — «дверь»: открыты — можно пройти
+    const slab = (a, c, t, h, info) => {
+      const L = Math.hypot(c.x - a.x, c.y - a.y);
+      if (L < 0.05) return;
+      const nx = (-(c.y - a.y) / L) * t;
+      const ny = ((c.x - a.x) / L) * t;
+      this._add(
+        [
+          { x: a.x + nx, y: a.y + ny },
+          { x: c.x + nx, y: c.y + ny },
+          { x: c.x - nx, y: c.y - ny },
+          { x: a.x - nx, y: a.y - ny },
+        ],
+        0,
+        h,
+        info,
+      );
+    };
+    for (const run of fenceRuns(project)) slab(run.a, run.b, 0.05, run.height, { kind: 'fence' });
+    for (const it of project.items) {
+      if (it.levelId !== SITE_LEVEL || !isFenceGate(it)) continue;
+      const r = ((it.rotation || 0) * Math.PI) / 180;
+      const hx = (Math.cos(r) * it.w) / 2;
+      const hy = (Math.sin(r) * it.w) / 2;
+      slab({ x: it.x - hx, y: it.y - hy }, { x: it.x + hx, y: it.y + hy }, 0.06, it.h, { kind: 'door', doorId: it.id, ref: { kind: 'item', id: it.id } });
     }
   }
 

@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   shadows: true,
   furniture3d: true,
   textures: true, // процедурные текстуры стен, полов, кровли
+  quality: 'medium', // графика 3D: low — быстро, medium, high — чётче тени и разрешение
   theme: 'system', // light | dark | system
   walkSpawn: 'entrance', // где появляется манекен: entrance | inside | point
   sunReal: false, // солнце по дате и времени (иначе — удобный постоянный свет)

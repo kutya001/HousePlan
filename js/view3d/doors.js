@@ -73,6 +73,7 @@ export class DoorAnimator {
       if (m.type === 'swing') p.node.rotation.y = m.angle * e;
       else if (m.type === 'slide') p.node.position.x = p.base.x + m.dx * e;
       else if (m.type === 'lift') p.node.position.y = p.base.y + m.dy * e;
+      else if (m.type === 'roll') p.node.scale.y = 1 - m.amount * e; // рулонные ворота сматываются к коробу
     }
   }
 }

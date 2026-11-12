@@ -1,4 +1,6 @@
 /** Участок: граница, забор, зоны ландшафта и объекты на земле. */
+import { fenceRuns } from '../../geometry/fence.js';
+import { FENCE_TYPES } from '../../model/fence.js';
 import { THEME, withAlpha } from './theme.js';
 import { ZONE_MATERIALS } from '../../model/defaults.js';
 import { bboxOf, polygonArea, dist, lerp } from '../../core/geometry.js';
@@ -28,17 +30,20 @@ export function drawSite(ctx, r) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // забор — столбики
+  // забор — сплошной линией по пролётам (в воротах — разрыв), столбики; сквозной — тоньше
   if (site.fence?.enabled && r.vp.scale > 6) {
     ctx.fillStyle = THEME.siteStroke;
+    ctx.strokeStyle = THEME.siteStroke;
     const s = r.px(3);
-    for (let i = 0; i < b.length; i++) {
-      const a = b[i];
-      const c = b[(i + 1) % b.length];
-      const L = dist(a, c);
-      const n = Math.max(1, Math.round(L / 2.5));
-      for (let k = 0; k < n; k++) {
-        const p = lerp(a, c, k / n);
+    for (const run of fenceRuns(r.project)) {
+      ctx.lineWidth = r.px(FENCE_TYPES[run.type].see ? 1 : 2.2);
+      ctx.beginPath();
+      ctx.moveTo(run.a.x, run.a.y);
+      ctx.lineTo(run.b.x, run.b.y);
+      ctx.stroke();
+      const n = Math.max(1, Math.round(run.length / 2.5));
+      for (let k = 0; k <= n; k++) {
+        const p = lerp(run.a, run.b, k / n);
         ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
       }
     }

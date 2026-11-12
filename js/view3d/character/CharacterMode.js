@@ -4,6 +4,7 @@
  * клик по объекту выделяет его (свойства, удаление, поворот — те же),
  * план рядом показывает, где стоит манекен.
  */
+import { isFenceGate } from '../../model/fence.js';
 import * as THREE from 'three';
 import { Mannequin } from './Mannequin.js';
 import { Animator } from './animation.js';
@@ -339,16 +340,26 @@ export class CharacterMode {
     const { project } = this.app;
     const c = this.ctrl;
     const lvl = this.levelId;
+    const f = c.forward;
+    let best = null;
+    // ворота и калитка участка — такие же двери
+    for (const it of project.items) {
+      if (it.levelId !== SITE_LEVEL || !isFenceGate(it)) continue;
+      const dx = it.x - c.pos.x;
+      const dz = it.y - c.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > Math.max(1.8, it.w / 2 + 1)) continue;
+      const score = d - 0.4 * ((dx * f.x + dz * f.z) / (d || 1));
+      if (!best || score < best.score) best = { id: it.id, score };
+    }
     const walls = project.walls.filter((w) => w.levelId === lvl);
-    if (!walls.length) return null;
+    if (!walls.length) return best;
     if (this._doorGeomsFor !== project) {
       this._doorGeomsFor = project;
       this._doorGeoms = new Map();
     }
     if (!this._doorGeoms.has(lvl)) this._doorGeoms.set(lvl, computeWallGeometry(walls));
     const geoms = this._doorGeoms.get(lvl);
-    const f = c.forward;
-    let best = null;
     for (const o of project.openings) {
       if (o.kind !== 'door') continue;
       const g = geoms.get(o.wallId);

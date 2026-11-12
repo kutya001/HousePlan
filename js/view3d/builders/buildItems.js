@@ -8,6 +8,9 @@ import { mat, glassMat, lampGlowMat } from '../materials.js';
 import { DEG } from '../../core/geometry.js';
 import { railingGeos, beam } from './railing.js';
 import { modelReady, requestModel } from '../models.js';
+import { catalogItem } from '../../model/catalog.js';
+import { OUTDOOR } from './itemsOutdoor.js';
+import { buildGate } from './buildGates.js';
 
 const WOOD = '#9a6b47';
 const DARK = '#2f3236';
@@ -575,8 +578,12 @@ function darken(hex) {
  * Модель объекта. Детали одного цвета объединяются в одну геометрию.
  * @returns {THREE.Group}
  */
+// навесы, козырьки, пергола, ограждения — виды одного предмета
+Object.assign(B, OUTDOOR);
+
 export function buildItem(item, baseY, elevation = item.elevation || 0, tilt = null) {
   if (item.type === 'custom') return buildCustom(item, baseY, elevation);
+  if (catalogItem(item.type)?.fenceGate) return buildGate(item, baseY + elevation);
   const parts = new Map();
   const add = (geom, color, opts = {}) => {
     const key = opts.glass ? 'glass' : opts.glow ? 'glow' : `${color || item.color}|${opts.opacity ?? 1}`;

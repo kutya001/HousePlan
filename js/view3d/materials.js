@@ -9,9 +9,18 @@ export const TEX = { on: true };
 const cache = new Map();
 const highlightCache = new Map();
 
+/** Глубина рельефа по рисункам (bumpScale): кладка и камень — заметнее, доска и черепица — слабее. */
+const RELIEF = { brick: 2.2, stone: 2.6, blockwork: 1.6, paving: 1.8, tiles: 2, metal: 1.6, shingle: 1.2, siding: 1.4, timber: 1.6, log: 2.4, wood: 1, profsheet: 2, seam: 1.6, slate: 1.6, ondulin: 2, walltile: 0.8, panels: 0.8, gravel: 1.4, plaster: 0.5, concrete: 0.5, picket: 1.2, deck: 1.2 };
+let quality = 'medium';
+
+/** Качество графики: на «быстром» материалы без рельефа. Меняется вместе с пересборкой сцены. */
+export function setQuality(q) {
+  quality = q;
+}
+
 export function mat(color, opts = {}) {
   const map = TEX.on && opts.map ? opts.map : '';
-  const key = `${color}|${opts.roughness ?? 0.85}|${opts.metalness ?? 0}|${opts.opacity ?? 1}|${opts.emissive ?? ''}|${map}`;
+  const key = `${quality === 'low' ? 'L' : ''}${color}|${opts.roughness ?? 0.85}|${opts.metalness ?? 0}|${opts.opacity ?? 1}|${opts.emissive ?? ''}|${map}`;
   if (!cache.has(key)) {
     const m = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color),
@@ -27,7 +36,14 @@ export function mat(color, opts = {}) {
       polygonOffsetFactor: 0,
       polygonOffsetUnits: 1,
     });
-    if (map) m.map = patternTexture(map);
+    if (map) {
+      m.map = patternTexture(map);
+      // рельеф из того же рисунка: швы кладки и доски читаются под боковым светом
+      if (RELIEF[map] && quality !== 'low' && m.map) {
+        m.bumpMap = m.map;
+        m.bumpScale = RELIEF[map];
+      }
+    }
     if (opts.emissive) {
       m.emissive = new THREE.Color(opts.emissive);
       m.emissiveIntensity = opts.emissiveIntensity ?? 0.6;
@@ -58,7 +74,8 @@ export function setLampGlow(k, windows = true) {
 }
 
 export function glassMat() {
-  return mat('#a9cde3', { roughness: 0.08, metalness: 0.1, opacity: 0.38 });
+  // гладкое и чуть «металлическое»: в стекле отражается небо
+  return mat('#a9cde3', { roughness: 0.04, metalness: 0.25, opacity: 0.36 });
 }
 
 /** Подсвеченная копия материала для выделенного объекта. */

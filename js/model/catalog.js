@@ -65,11 +65,29 @@ export const CATALOG = [
 
   // Конструкции: балкон и козырёк крепятся к наружной стене снаружи дома
   { type: 'balcony', name: 'Балкон', category: 'structure', w: 3.0, d: 1.2, h: 1.0, color: '#c9c3b8', wallSnap: true, attached: true },
-  { type: 'canopy', name: 'Козырёк над входом', category: 'structure', w: 2.2, d: 1.3, h: 0.16, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4 },
+  // family — виды одного предмета: в свойствах переключаются списком «Вид», размеры и место остаются
+  { type: 'canopy', name: 'Козырёк односкатный', category: 'structure', w: 2.2, d: 1.3, h: 0.16, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4, family: 'canopy' },
+  { type: 'canopy_gable', name: 'Козырёк двускатный', category: 'structure', w: 2.2, d: 1.3, h: 0.5, color: '#8a4b3a', wallSnap: true, attached: true, elevation: 2.4, family: 'canopy' },
+  { type: 'canopy_arch', name: 'Козырёк арочный', category: 'structure', w: 2.2, d: 1.3, h: 0.45, color: '#6d7276', wallSnap: true, attached: true, elevation: 2.4, family: 'canopy' },
+  { type: 'canopy_glass', name: 'Козырёк стеклянный на тягах', category: 'structure', w: 2.2, d: 1.3, h: 0.5, color: '#9aa1a8', wallSnap: true, attached: true, elevation: 2.4, family: 'canopy' },
+  // ограждения: прямой участок, ставится по краю террасы, балкона, крыши; стыкуются в линию
+  { type: 'railing', name: 'Ограждение: балясины', category: 'structure', w: 2.0, d: 0.06, h: 1.0, color: '#3d4146', family: 'railing', rail: 'bars' },
+  { type: 'railing_wood', name: 'Ограждение: дерево', category: 'structure', w: 2.0, d: 0.06, h: 1.0, color: '#8a6a4a', family: 'railing', rail: 'wood' },
+  { type: 'railing_glass', name: 'Ограждение: стекло', category: 'structure', w: 2.0, d: 0.06, h: 1.0, color: '#9aa1a8', family: 'railing', rail: 'glass' },
+  { type: 'railing_lines', name: 'Ограждение: ригели', category: 'structure', w: 2.0, d: 0.06, h: 1.0, color: '#3d4146', family: 'railing', rail: 'horizontal' },
+  { type: 'railing_forged', name: 'Ограждение: ковка', category: 'structure', w: 2.0, d: 0.06, h: 1.0, color: '#2f3134', family: 'railing', rail: 'forged' },
   { type: 'roof_window', name: 'Мансардное окно', category: 'structure', w: 0.78, d: 1.18, h: 0.12, color: '#4a4f55', roofMount: true },
   // дымоход идёт от пола своего этажа сквозь перекрытия и кровлю — высоту считает программа
   { type: 'chimney', name: 'Дымоход', category: 'structure', w: 0.5, d: 0.5, h: 3.0, color: '#8a5646', chimney: true },
-  { type: 'carport', name: 'Навес для машины', category: 'structure', w: 3.6, d: 6.0, h: 2.7, color: '#6d7276', outdoor: true },
+  { type: 'carport', name: 'Навес односкатный (поликарбонат)', category: 'structure', w: 3.6, d: 6.0, h: 2.7, color: '#6d7276', outdoor: true, family: 'carport' },
+  { type: 'carport_gable', name: 'Навес двускатный', category: 'structure', w: 3.6, d: 6.0, h: 3.0, color: '#6d5a48', outdoor: true, family: 'carport' },
+  { type: 'carport_arch', name: 'Навес арочный', category: 'structure', w: 3.6, d: 6.0, h: 2.9, color: '#6d7276', outdoor: true, family: 'carport' },
+  { type: 'carport_flat', name: 'Навес плоский', category: 'structure', w: 3.6, d: 6.0, h: 2.6, color: '#4b4f55', outdoor: true, family: 'carport' },
+  { type: 'pergola', name: 'Пергола', category: 'structure', w: 3.6, d: 4.0, h: 2.6, color: '#8a6a4a', outdoor: true, family: 'carport' },
+  // ворота и калитка участка: встают на линию забора, пролёт под ними размыкается
+  { type: 'gate_swing', name: 'Ворота распашные', category: 'outdoor', w: 3.6, d: 0.12, h: 1.8, color: '#6f5a48', outdoor: true, fenceGate: true, family: 'gate' },
+  { type: 'gate_slide', name: 'Ворота откатные', category: 'outdoor', w: 4.0, d: 0.12, h: 1.8, color: '#5c6b78', outdoor: true, fenceGate: true, family: 'gate' },
+  { type: 'wicket', name: 'Калитка', category: 'outdoor', w: 1.0, d: 0.1, h: 1.8, color: '#6f5a48', outdoor: true, fenceGate: true },
 
   // Инженерия: layer — слой плана (электрика, сантехника, отопление);
   // marker — маленький значок не меньше markerPx пикселей на плане; ceiling — висит под потолком
@@ -112,4 +130,11 @@ const BY_TYPE = new Map(CATALOG.map((c) => [c.type, c]));
 
 export function catalogItem(type) {
   return BY_TYPE.get(type) || null;
+}
+
+/** Виды одного предмета (козырьки, навесы, ограждения, ворота): { type: название } или null. */
+export function familyOptions(type) {
+  const fam = BY_TYPE.get(type)?.family;
+  if (!fam) return null;
+  return Object.fromEntries(CATALOG.filter((c) => c.family === fam).map((c) => [c.type, c.name]));
 }
