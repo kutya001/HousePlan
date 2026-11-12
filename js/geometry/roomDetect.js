@@ -96,7 +96,11 @@ export function levelFootprints(walls) {
       } else i++;
     }
     if (pts.length < 3) continue;
-    out.push(insetPolygon(pts, dist.map((d) => -d)));
+    const offset = insetPolygon(pts, dist.map((d) => -d));
+    // Наружный сдвиг самопересекается на узких изломах невыпуклого контура —
+    // earcut тогда оставляет газон внутри подвала. Откат к простому контуру осей:
+    // он накрывает все комнаты, а кромка в полутолщину стены скрыта в теле стены.
+    out.push(isSimplePolygon(offset) ? offset : pts);
   }
   return out;
 }
