@@ -4,7 +4,7 @@
  * копия кладётся в кэш; без сети приложение открывается из кэша.
  * Файлы попадают в кэш по мере использования (3D — после первого открытия 3D-вида).
  */
-const CACHE = 'houseplan-v10';
+const CACHE = 'houseplan-v11';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -54,7 +54,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    Promise.race([fetch(req), timeout(6000)])
+    // no-cache — сверять файл с сервером, а не брать из HTTP-кэша браузера: после обновления
+    // сайта нельзя получить половину модулей старыми (GitHub Pages разрешает кэш на 10 минут)
+    Promise.race([fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }), timeout(6000)])
       .then((res) => {
         if (res && res.ok) {
           const copy = res.clone();

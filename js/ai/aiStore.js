@@ -7,12 +7,15 @@ const KEY = 'houseplan.ai.key.v1';
 const MODEL = 'houseplan.ai.model.v1';
 const MODELS = 'houseplan.ai.models.v1';
 const CHAT = 'houseplan.ai.chat.v1';
+const EFFORT = 'houseplan.ai.effort.v1';
+const WORKSPACE = 'houseplan.ai.workspace.v1';
 
 /** Модели по умолчанию — пока ключ не проверен и список с сервера не получен. */
 export const DEFAULT_MODELS = [
   { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', note: 'быстрая и толковая — лучший выбор' },
   { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', note: 'самая умная, медленнее и дороже' },
   { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', note: 'самая быстрая и дешёвая, для простых правок' },
+  { id: 'claude-fable-5-2', name: 'Claude Fable 5.2', note: 'для самых сложных домов; заметно дороже' },
 ];
 export const DEFAULT_MODEL = DEFAULT_MODELS[0].id;
 
@@ -60,8 +63,12 @@ export function getModels() {
 
 /** Список с сервера: только Claude, новые сверху; подписи — из списка по умолчанию. */
 export function saveModels(list) {
-  const known = new Map(DEFAULT_MODELS.map((m) => [m.id, m]));
-  const out = (list || []).filter((m) => /^claude-/.test(m.id)).map((m) => ({ id: m.id, name: m.name || m.id, note: known.get(m.id)?.note || '' }));
+  const known = new Map(DEFAULT_MODELS.map((m, i) => [m.id, { ...m, order: i }]));
+  // текущие модели — первыми и в привычном порядке, остальные (прежние поколения) — после
+  const out = (list || [])
+    .filter((m) => /^claude-/.test(m.id))
+    .map((m) => ({ id: m.id, name: m.name || m.id, note: known.get(m.id)?.note || '', ...(known.has(m.id) ? {} : { old: true }) }))
+    .sort((a, b) => (known.get(a.id)?.order ?? 99) - (known.get(b.id)?.order ?? 99));
   write(MODELS, out.length ? JSON.stringify(out) : null);
   return out.length ? out : DEFAULT_MODELS;
 }
@@ -74,6 +81,17 @@ export function getModel() {
 }
 
 export const setModel = (id) => write(MODEL, id);
+
+/** Усилие модели: low | medium | high (по умолчанию — «Обычно»). */
+export function getEffort() {
+  const e = read(EFFORT);
+  return ['low', 'medium', 'high'].includes(e) ? e : 'medium';
+}
+export const setEffort = (e) => write(EFFORT, e);
+
+/** ID рабочего пространства — только для ключей, не привязанных к одному пространству. */
+export const getWorkspace = () => (read(WORKSPACE) || '').trim();
+export const setWorkspace = (id) => write(WORKSPACE, String(id || '').trim() || null);
 
 /** Переписка: только текст (без фото и JSON проекта), последние 60 реплик. */
 export function loadChat() {

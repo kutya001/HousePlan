@@ -6,7 +6,7 @@
  */
 import { h, icon, clear } from './dom.js';
 import { openAiSettings } from './AiKeyDialog.js';
-import { getKey, getModel, getModels, loadChat, saveChat } from '../ai/aiStore.js';
+import { getKey, getModel, getModels, getEffort, getWorkspace, loadChat, saveChat } from '../ai/aiStore.js';
 import { describeError } from '../ai/claudeClient.js';
 import { runTurn, snapshotProject, carryOver } from '../ai/assistant.js';
 import { summarizeIssues, plural } from '../model/validate.js';
@@ -434,7 +434,9 @@ export class AiPanel {
     try {
       const res = await runTurn({
         key,
+        workspace: getWorkspace(),
         model,
+        effort: getEffort(),
         history,
         text,
         images,
@@ -444,6 +446,8 @@ export class AiPanel {
           if (p.type === 'text') live({ text: p.text, status: 'Пишу ответ…' });
           else if (p.type === 'tool') live({ status: `${p.name === 'build_project' ? 'Строю проект' : 'Готовлю правки'}… ${kb(p.chars)}` });
           else if (p.type === 'retry') live({ status: `Правки не легли — Claude исправляет (попытка ${p.attempt + 1})…` });
+          else if (p.type === 'thinking') live({ status: 'Обдумываю…' });
+          else if (p.type === 'wait') live({ status: `Сервер занят — повторю через ${p.seconds} с (попытка ${p.attempt + 1})…` });
         },
       });
       bot.text = res.text;
@@ -455,7 +459,7 @@ export class AiPanel {
       bot.usage = err.usage || bot.usage;
       bot.error = describeError(err, model);
       if (err.name !== 'AbortError') bot.retry = { text, images };
-      if ([401, 403, 404].includes(err.status)) bot.fixKey = true;
+      if ([401, 403, 404].includes(err.status) || err.needsWorkspace) bot.fixKey = true;
     } finally {
       bot.pending = false;
       delete bot.status;

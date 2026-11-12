@@ -27,9 +27,12 @@ export function openMenu(app, opts) {
   const menu = h('div', { class: `ctx-menu ${sheet ? 'sheet' : ''}`, role: 'menu', 'aria-label': opts.title || 'Меню' });
   if (opts.title) menu.append(h('div', { class: 'ctx-title' }, opts.title));
   const buttons = [];
-  // палец, отпущенный после долгого нажатия, не должен «нажать» пункт, оказавшийся под ним
-  const openedAt = performance.now();
-  const tooSoon = () => performance.now() - openedAt < 350;
+  // Палец, отпущенный после долгого нажатия, не должен «нажать» пункт, оказавшийся под ним:
+  // пункт срабатывает, только если нажатие началось уже на меню (или с клавиатуры — detail 0).
+  // Задержки по времени нет: быстрый клик мышью сразу после открытия проходит.
+  let armed = false;
+  menu.addEventListener('pointerdown', () => (armed = true), true);
+  const stray = (e) => !armed && e?.detail !== 0;
   for (const it of opts.items.filter(Boolean)) {
     if (it.separator) {
       menu.append(h('div', { class: 'ctx-sep', role: 'separator' }));
@@ -42,8 +45,8 @@ export function openMenu(app, opts) {
         role: it.toggle ? 'menuitemcheckbox' : 'menuitem',
         'aria-checked': it.toggle ? String(!!it.active) : null,
         disabled: it.disabled,
-        onclick: () => {
-          if (tooSoon()) return;
+        onclick: (e) => {
+          if (stray(e)) return;
           if (it.toggle) {
             const on = !b.classList.contains('active');
             b.classList.toggle('active', on);

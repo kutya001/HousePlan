@@ -333,3 +333,76 @@ export function insetPolygon(poly, distances) {
   }
   return out;
 }
+
+/** Выпуклая оболочка точек (обход против часовой стрелки в осях плана). */
+export function convexHull(points) {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y).filter((p, i, a) => !i || Math.abs(p.x - a[i - 1].x) > 1e-9 || Math.abs(p.y - a[i - 1].y) > 1e-9);
+  if (pts.length < 3) return pts;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 1e-12) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half([...pts].reverse())].map((p) => ({ x: p.x, y: p.y }));
+}
+
+/** Треугольники простого многоугольника (отрезание «ушей»). */
+export function triangulate(poly) {
+  const pts = polygonSignedArea(poly) < 0 ? [...poly].reverse() : [...poly];
+  const out = [];
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const inTri = (p, a, b, c) => cross(a, b, p) > 1e-12 && cross(b, c, p) > 1e-12 && cross(c, a, p) > 1e-12;
+  let guard = pts.length * pts.length + 8;
+  while (pts.length > 3 && guard-- > 0) {
+    let cut = false;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[(i + pts.length - 1) % pts.length];
+      const b = pts[i];
+      const c = pts[(i + 1) % pts.length];
+      const area = cross(a, b, c);
+      if (area < -1e-12) continue; // вогнутый угол
+      if (area > 1e-12 && pts.some((p) => p !== a && p !== b && p !== c && inTri(p, a, b, c))) continue;
+      if (area > 1e-12) out.push([a, b, c]);
+      pts.splice(i, 1); // вершина на прямой — просто убираем
+      cut = true;
+      break;
+    }
+    if (!cut) break; // вырожденный контур — отдаём, что получилось
+  }
+  if (pts.length === 3 && Math.abs(cross(pts[0], pts[1], pts[2])) > 1e-12) out.push([pts[0], pts[1], pts[2]]);
+  return out;
+}
+
+/** Выпуклые части многоугольника: сам он, если выпуклый, иначе треугольники. */
+export function convexParts(poly) {
+  if (poly.length < 3) return [];
+  return isConvex(poly) ? [poly] : triangulate(poly);
+}
+
+/** Пересекаются ли многоугольники (включая вложенность одного в другой). */
+export function polygonsOverlap(a, b) {
+  if (a.some((p) => pointInPolygon(p, b)) || b.some((p) => pointInPolygon(p, a))) return true;
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      if (segmentIntersect(a[i], a[(i + 1) % a.length], b[j], b[(j + 1) % b.length], 1e-9)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Многоугольник минус набор любых многоугольников (невыпуклых, пересекающихся,
+ * выходящих за край): непересекающиеся выпуклые куски остатка.
+ */
+export function subtractPolygons(subject, holes) {
+  let pieces = convexParts(subject);
+  for (const h of holes) {
+    for (const part of convexParts(h)) pieces = pieces.flatMap((p) => subtractConvex(p, part));
+  }
+  return pieces;
+}

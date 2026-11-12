@@ -80,7 +80,8 @@ export function findFaces(walls) {
  */
 export function levelFootprints(walls) {
   const out = [];
-  for (const loop of traceFaces(walls).outer) {
+  // «висячие» стены (перегородка наружу, недорисованная пристройка) в контур не входят
+  for (const loop of traceFaces(walls, { prune: true }).outer) {
     let pts = loop.map((e) => ({ ...e.p }));
     let dist = loop.map((e) => e.wall.thickness / 2);
     // убрать вершины на прямой (стена, разрезанная примыканием)
@@ -106,8 +107,25 @@ export function levelFootprints(walls) {
   return out;
 }
 
-function traceFaces(walls) {
-  const { verts, edges } = buildGraph(walls);
+/** Убрать «висячие» рёбра: те, у которых конец ни с чем не соединён (и так до конца). */
+function pruneDangling(edges) {
+  let list = edges;
+  for (;;) {
+    const deg = new Map();
+    for (const e of list) {
+      deg.set(e.u, (deg.get(e.u) || 0) + 1);
+      deg.set(e.v, (deg.get(e.v) || 0) + 1);
+    }
+    const next = list.filter((e) => deg.get(e.u) > 1 && deg.get(e.v) > 1);
+    if (next.length === list.length) return list;
+    list = next;
+  }
+}
+
+function traceFaces(walls, { prune = false } = {}) {
+  const graph = buildGraph(walls);
+  const verts = graph.verts;
+  const edges = prune ? pruneDangling(graph.edges) : graph.edges;
   const out = verts.map(() => []);
   const half = [];
   for (const e of edges) {

@@ -630,7 +630,8 @@ kbd {
   display: flex;
   flex-direction: column;
   width: min(460px, 100%);
-  max-height: min(860px, 100%);
+  /* высота — от окна, а не от содержимого: на невысоком экране окно не уезжает за край */
+  max-height: min(860px, calc(100dvh - 40px));
   border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow-modal);
@@ -659,6 +660,7 @@ kbd {
 .modal-body {
   padding: 8px 22px 20px;
   overflow-y: auto;
+  min-height: 0;
 }
 .modal-text {
   margin: 0;
@@ -1874,4 +1876,35 @@ kbd {
   background: var(--accent-soft);
   color: var(--accent-ink);
   font-size: var(--fs-s);
+}
+.ai-more {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+.ai-more > summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+.ai-more[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-more .ai-key-input {
+  width: 100%;
+}
+.ai-effort {
+  align-self: flex-start;
+}
+
+/* кнопки настроек ИИ всегда на виду, даже когда список моделей длинный */
+.ai-settings .xch-actions {
+  position: sticky;
+  bottom: -20px;
+  margin: 0 -22px -20px;
+  padding: 10px 22px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }

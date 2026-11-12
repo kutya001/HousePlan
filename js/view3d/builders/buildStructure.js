@@ -8,7 +8,7 @@ import { stairLayout } from '../../geometry/stairGeometry.js';
 import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
 import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
-import { levelFootprints } from '../../geometry/roomDetect.js';
+import { basementShapes } from '../../geometry/excavation.js';
 import { computeWallGeometry } from '../../geometry/wallGeometry.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, STRINGER_D, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
 import { railingMesh } from './railing.js';
@@ -43,7 +43,8 @@ export function buildFloors(project, level, base, index) {
   }
   // дно котлована под подвалом — бетонная плита по пятну стен
   if (isBasement(level)) {
-    const slabs = levelFootprints(project.walls.filter((w) => w.levelId === level.id)).map((fp) => extrudePolygon(fp, base - 0.35, base - 0.015));
+    // по всем пятнам подвала, в том числе пока стены не замкнуты (см. excavation.js)
+    const slabs = basementShapes(project, level).map((fp) => extrudePolygon(fp, base - 0.35, base - 0.015));
     const geo = mergeGeometries(slabs);
     if (geo) group.add(mesh(geo, mat('#a29d95', { roughness: 0.95 }), null, { cast: false }));
   }

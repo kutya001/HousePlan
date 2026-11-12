@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyPatch, PatchError } from '../../js/ai/jsonPatch.js';
 import { SSEParser, MessageBuilder, streamMessage, describeError, ApiError } from '../../js/ai/claudeClient.js';
-import { snapshotProject, buildMessages, projectFromTool, runTurn, carryOver, buildSystem, TOOLS } from '../../js/ai/assistant.js';
+import { snapshotProject, buildMessages, projectFromTool, runTurn, carryOver, buildSystem, TOOLS, replayBlocks } from '../../js/ai/assistant.js';
 import { buildHousePreset } from '../../js/model/presets.js';
 import { createEmptyProject } from '../../js/model/project.js';
 import { EXAMPLE } from '../../js/io/aiPrompt.js';
@@ -64,7 +64,8 @@ test('поток: текст, JSON инструмента, расход токе
   const h = f.calls[0].init.headers;
   assert.equal(h['x-api-key'], 'sk-ant-test');
   assert.equal(h['anthropic-dangerous-direct-browser-access'], 'true');
-  assert.equal(h['anthropic-version'], '2023-06-01');
+  assert.equal(h['anthropic-version'], '2026-10-21');
+  assert.equal(h['anthropic-workspace-id'], undefined);
   assert.equal(f.calls[0].body.stream, true);
 });
 
@@ -193,10 +194,64 @@ test('перенос места участка и точки манекена', 
 test('ход разговора: модель с меньшим пределом ответа — повтор с ним', async () => {
   const p = buildHousePreset('box1', {});
   const f = fakeFetch([
-    { status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens: 32000 > 16384, which is the maximum allowed number of output tokens for this model' } } },
+    { status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens: 64000 > 16384, which is the maximum allowed number of output tokens for this model' } } },
     { sse: sseStream({ text: 'Готово.' }) },
   ]);
   const res = await runTurn({ key: 'k', model: 'm', text: 'привет', snapshot: snapshotProject(p), fetchImpl: f });
   assert.equal(res.text, 'Готово.');
   assert.equal(f.calls[1].body.max_tokens, 16384);
+});
+
+test('размышления: блоки возвращаются API без изменений при повторе правок', async () => {
+  const p = buildHousePreset('box2', {});
+  const snap = snapshotProject(p);
+  const bad = { summary: 'x', patch: [{ op: 'remove', path: '/levels/0/rooms/r77' }] };
+  const good = { summary: 'Пол', patch: [{ op: 'replace', path: '/levels/0/rooms/r1/floor', value: 'tile' }] };
+  const f = fakeFetch([{ sse: sseStream({ thinking: 'Сначала найду комнату…', text: 'Меняю.', tool: 'edit_project', input: bad }) }, { sse: sseStream({ thinking: '', text: '', tool: 'edit_project', input: good }) }]);
+  const seen = [];
+  const res = await runTurn({ key: 'k', model: 'm', effort: 'low', workspace: 'wrkspc_01ABC', text: 'плитку', snapshot: snap, fetchImpl: f, onProgress: (x) => seen.push(x.type) });
+  assert.equal(res.project.rooms[0].floor, 'tile');
+  assert.ok(seen.includes('thinking'));
+  const replay = f.calls[1].body.messages.at(-2).content;
+  assert.deepEqual(replay[0], { type: 'thinking', thinking: 'Сначала найду комнату…', signature: 'SIG_abc123==' });
+  assert.deepEqual(replay.map((b) => b.type), ['thinking', 'text', 'tool_use']);
+  // следующее сообщение — только tool_result, без текста после него
+  assert.deepEqual(f.calls[1].body.messages.at(-1).content.map((b) => b.type), ['tool_result']);
+  assert.deepEqual(f.calls[0].body.output_config, { effort: 'low' });
+  assert.equal(f.calls[0].init.headers['anthropic-workspace-id'], 'wrkspc_01ABC');
+  // пустое размышление (display: omitted) и неизвестные блоки возвращаются как есть, пустой текст — нет
+  assert.deepEqual(replayBlocks([{ type: 'thinking', thinking: '', signature: 'S' }, { type: 'redacted_thinking', data: 'zz' }, { type: 'text', text: '' }]), [
+    { type: 'thinking', thinking: '', signature: 'S' },
+    { type: 'redacted_thinking', data: 'zz' },
+  ]);
+});
+
+test('перегрузка сервера: запрос повторяется сам; усилие отключается, если модель его не знает', async () => {
+  const p = buildHousePreset('box1', {});
+  const f = fakeFetch([
+    { status: 529, body: { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } } },
+    { status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'output_config.effort: Extra inputs are not permitted' } } },
+    { sse: sseStream({ text: 'Готово.' }) },
+  ]);
+  const seen = [];
+  const res = await runTurn({ key: 'k', model: 'claude-haiku-4-5', effort: 'medium', text: 'привет', snapshot: snapshotProject(p), fetchImpl: f, retryDelays: [1, 1], onProgress: (x) => seen.push(x.type) });
+  assert.equal(res.text, 'Готово.');
+  assert.equal(f.calls.length, 3);
+  assert.ok(seen.includes('wait'));
+  assert.deepEqual(f.calls[1].body.output_config, { effort: 'medium' });
+  assert.equal(f.calls[2].body.output_config, undefined);
+});
+
+test('отказ модели и особые ошибки ключа — понятным текстом', async () => {
+  const p = buildHousePreset('box1', {});
+  const f = fakeFetch([{ sse: sseStream({ text: '', stop: 'refusal' }) }]);
+  await assert.rejects(() => runTurn({ key: 'k', model: 'm', text: 'x', snapshot: snapshotProject(p), fetchImpl: f }), /отказался/);
+  const ws = new ApiError(400, 'invalid_request_error', 'This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header');
+  assert.ok(ws.needsWorkspace);
+  assert.match(describeError(ws), /рабочему пространству/);
+  const cors = new ApiError(401, 'authentication_error', 'CORS requests are not allowed for this Organization because of its settings');
+  assert.match(describeError(cors), /не разрешает запросы из браузера/);
+  assert.match(describeError(new ApiError(401, 'authentication_error', 'invalid x-api-key')), /истёк срок/);
+  assert.ok(new ApiError(429, 'rate_limit_error', '', 3).transient);
+  assert.ok(!new ApiError(429, 'rate_limit_error', '').transient, 'лимит тарифа без retry-after не повторяем');
 });

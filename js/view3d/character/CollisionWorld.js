@@ -14,9 +14,8 @@ import { stairLayout } from '../../geometry/stairGeometry.js';
 import { porchSteps } from '../../geometry/porch.js';
 import { pointInPolygon, projectOnSegment, rectCorners, circlePolygon, bboxOf, toWorld } from '../../core/geometry.js';
 import { levelElevation, wallHeight, levelBelow, levelTop, groundLevel, isBasement, SITE_LEVEL } from '../../model/project.js';
-import { excavationOutlines, inExcavation } from '../../geometry/excavation.js';
+import { excavationOutlines, inExcavation, basementShapes } from '../../geometry/excavation.js';
 import { cellarEntries, RAIL_H } from '../../geometry/cellarEntry.js';
-import { levelFootprints } from '../../geometry/roomDetect.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairStyle, TREAD } from '../../model/defaults.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
@@ -81,7 +80,7 @@ export class CollisionWorld {
       }
       if (level === ground) for (const st of porchSteps(project, level.id, geoms, base)) this._add(st.poly, 0, st.top, { kind: 'porch' });
       // дно котлована подвала
-      if (isBasement(level)) for (const fp of levelFootprints(walls)) this._add(fp, base - 0.35, base - 0.015, { kind: 'floor', noSide: true });
+      if (isBasement(level)) for (const fp of basementShapes(project, level)) this._add(fp, base - 0.35, base - 0.015, { kind: 'floor', noSide: true });
 
       // полы с вырезами под лестницы с этажа ниже
       const below = levelBelow(project, level.id);

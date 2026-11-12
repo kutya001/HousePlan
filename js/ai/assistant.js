@@ -17,7 +17,8 @@ import { applyPatch } from './jsonPatch.js';
 import { streamMessage, ApiError } from './claudeClient.js';
 import { SITE_LEVEL, getLevel } from '../model/project.js';
 
-export const MAX_TOKENS = 32000;
+// размышление модели тоже расходует этот лимит — берём с запасом
+export const MAX_TOKENS = 64000;
 const HISTORY_TURNS = 12;
 
 export const TOOLS = [
@@ -234,37 +235,68 @@ function addUsage(total, u = {}) {
   total.cacheWrite += u.cache_creation_input_tokens || 0;
 }
 
-/** Блоки ответа — в историю для повторной попытки (без служебных полей). */
-function replayBlocks(content) {
+/**
+ * Ответ модели — обратно в историю для повторной попытки внутри того же хода.
+ * Блоки размышлений (thinking, redacted_thinking) API требует вернуть ровно такими,
+ * какими они пришли, вместе с вызовом инструмента; пустой текст API не принимает.
+ */
+export function replayBlocks(content) {
   return content
     .map((b) => {
       if (b.type === 'text') return b.text ? { type: 'text', text: b.text } : null;
       if (b.type === 'tool_use') return { type: 'tool_use', id: b.id, name: b.name, input: b.inputError ? {} : b.input || {} };
-      return null;
+      if (b.type === 'thinking') return { type: 'thinking', thinking: b.thinking || '', signature: b.signature || '' };
+      return { ...b }; // redacted_thinking и будущие типы — как есть
     })
     .filter(Boolean);
 }
 
+/** Усилие модели: меньше — быстрее и дешевле, больше — тщательнее (output_config.effort). */
+export const EFFORTS = { low: 'Быстро', medium: 'Обычно', high: 'Тщательно' };
+
+const STOP_TEXT = {
+  refusal: 'Claude отказался выполнять этот запрос. Переформулируйте его или выберите другую модель в настройках ИИ.',
+  model_context_window_exceeded: 'Разговор и проект не помещаются в память модели — начните новый разговор («+» вверху вкладки).',
+};
+
 /**
  * Один ход разговора: запрос → (инструмент → проект) с автоповтором при ошибке правок.
- * @param opts { key, model, history, text, images, snapshot, signal, onProgress, fetchImpl, maxRetries }
+ * @param opts { key, workspace, model, effort, history, text, images, snapshot, signal, onProgress, fetchImpl, maxRetries, retryDelays }
  * @returns {{ text, project?, warnings?, summary?, tool?, changes?, usage, attempts }}
  */
-export async function runTurn({ key, model, history = [], text, images = [], snapshot, signal, onProgress, fetchImpl, maxRetries = 2 }) {
+export async function runTurn({ key, workspace = '', model, effort = '', history = [], text, images = [], snapshot, signal, onProgress, fetchImpl, maxRetries = 2, retryDelays }) {
   const system = buildSystem();
   const messages = buildMessages({ history, text, images, context: snapshot.context });
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const texts = [];
   let maxTokens = MAX_TOKENS;
+  let useEffort = !!EFFORTS[effort];
+  const send = () =>
+    streamMessage({
+      key,
+      workspace,
+      body: { model, max_tokens: maxTokens, system, tools: TOOLS, messages, ...(useEffort ? { output_config: { effort } } : {}) },
+      signal,
+      onProgress,
+      fetchImpl,
+      retryDelays,
+    });
+  // Запрос, который модель не принимает из-за необязательных параметров, повторяем без них:
+  // у старых моделей меньше предел ответа и нет настройки усилия.
   const request = async () => {
-    try {
-      return await streamMessage({ key, body: { model, max_tokens: maxTokens, system, tools: TOOLS, messages }, signal, onProgress, fetchImpl });
-    } catch (err) {
-      // у модели меньший предел ответа — повторить с ним (число берём из текста ошибки)
-      if (!(err instanceof ApiError) || err.status !== 400 || !/max_tokens/i.test(err.message) || maxTokens <= 8192) throw err;
-      const limit = Math.max(...(err.message.match(/\d{4,6}/g) || ['8192']).map(Number).filter((n) => n < maxTokens), 8192);
-      maxTokens = limit;
-      return streamMessage({ key, body: { model, max_tokens: maxTokens, system, tools: TOOLS, messages }, signal, onProgress, fetchImpl });
+    for (let fix = 0; ; fix++) {
+      try {
+        return await send();
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 400 || fix >= 2) throw err;
+        if (/max_tokens/i.test(err.message) && maxTokens > 8192) {
+          // «max_tokens: 64000 > 16384, which is the maximum…» — берём предел модели из текста ошибки
+          const limits = (err.message.match(/\d{4,6}/g) || []).map(Number).filter((n) => n < maxTokens);
+          maxTokens = Math.max(4096, limits.length ? Math.min(...limits) : 8192);
+        } else if (useEffort && /effort|output_config/i.test(err.message)) {
+          useEffort = false;
+        } else throw err;
+      }
     }
   };
   for (let attempt = 0; ; attempt++) {
@@ -280,7 +312,13 @@ export async function runTurn({ key, model, history = [], text, images = [], sna
     const tool = tools[0];
     const cut = msg.stop_reason === 'max_tokens';
     if (!tool) {
-      if (cut && !reply) throw new Error('Ответ не поместился в лимит — попросите сделать по частям (например, сначала первый этаж).');
+      const stopped = STOP_TEXT[msg.stop_reason];
+      if (stopped || (cut && !reply)) {
+        const e = new Error(stopped || 'Ответ не поместился в лимит — попросите сделать по частям (например, сначала первый этаж).');
+        e.usage = usage;
+        e.text = texts.join('\n\n');
+        throw e;
+      }
       return { text: texts.join('\n\n'), usage, attempts: attempt + 1 };
     }
     let error;
@@ -298,6 +336,7 @@ export async function runTurn({ key, model, history = [], text, images = [], sna
       throw e;
     }
     onProgress?.({ type: 'retry', attempt: attempt + 1, error: error.message });
+    // продолжение того же хода: ответ модели целиком (с размышлениями) + только tool_result
     messages.push(
       { role: 'assistant', content: replayBlocks(msg.content) },
       {

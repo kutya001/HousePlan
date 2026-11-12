@@ -79,7 +79,7 @@ export function toExchange(project, { ids: withIds = false, idMap = null } = {})
         .map((r) => tag('r', { name: r.name, floor: r.floor, ...(r.heatedFloor ? { heatedFloor: true } : {}), points: r.points.map(pt) }, r, li)),
       stairs: project.stairs
         .filter((s) => s.levelId === level.id)
-        .map((s) => tag('s', { shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' ? { flight: r3(s.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) }, s, li)),
+        .map((s) => tag('s', { shape: s.shape, x: r3(s.x), y: r3(s.y), rotation: r3(s.rotation || 0), width: r3(s.width), length: r3(s.length), ...(s.shape === 'L' || s.shape === 'U' || Math.abs((s.flight ?? DEFAULTS.stair.flight) - DEFAULTS.stair.flight) > 1e-3 ? { flight: r3(s.flight ?? DEFAULTS.stair.flight) } : {}), ...(s.flip ? { flip: true } : {}), ...(isColor(s.color) && s.color.toLowerCase() !== COLORS.stair.toLowerCase() ? { color: s.color } : {}), ...(s.shape !== 'spiral' ? { style: stairStyle(s) } : {}), ...(s.railing && s.railing !== 'auto' ? { railing: s.railing } : {}) }, s, li)),
       furniture: project.items.filter((it) => it.levelId === level.id).map((it) => tag('f', itemOut(it), it, li)),
       roofs: project.roofs
         .filter((r) => r.levelId === level.id)
@@ -411,6 +411,7 @@ function importLevel(project, lvl, l, k, warnings) {
     st.flip = !!s.flip;
     if (STAIR_STYLES[s.style]) st.style = s.style;
     if (RAILINGS[s.railing]) st.railing = s.railing;
+    if (isColor(s.color)) st.color = s.color;
     project.stairs.push(st);
   }
   for (const it of l.furniture || l.items || []) addItem(project, it?.outdoor ? SITE_LEVEL : lvl.id, it, k, warnings);

@@ -394,6 +394,8 @@ export class View3D {
     ray.setFromCamera(ndc, this.camera);
     for (const h of ray.intersectObject(this.root, true)) {
       if (!isShown(h.object)) continue;
+      // стена, которую камера прогулки сделала прозрачной, клик не перехватывает
+      if (h.object.material?.userData?.fadedFrom) continue;
       let o = h.object;
       while (o && !o.userData.ref) o = o.parent;
       if (o) return o.userData.ref;
