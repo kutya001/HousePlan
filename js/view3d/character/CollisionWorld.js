@@ -20,7 +20,7 @@ import { levelFootprints } from '../../geometry/roomDetect.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairStyle, TREAD } from '../../model/defaults.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT } from '../../geometry/stairRails.js';
-import { stairRise3D, wallPolys } from '../builders/buildStructure.js';
+import { stairRise3D, wallPolys, stairFootprintsAbove } from '../builders/buildStructure.js';
 
 /** Предметы, сквозь которые можно пройти, — только опора (ковёр) или вовсе ничего. */
 const FLAT = new Set(['rug']);
@@ -102,8 +102,8 @@ export class CollisionWorld {
           const th = style === 'solid' ? st.top : st.thin ? 0.05 : st.landing ? TREAD.landing : TREAD[style];
           this._add(st.poly, base + st.top - th, base + st.top, { kind: 'stair', ref: { kind: 'stair', id: s.id } });
         }
-        // перила марша — не упасть с лестницы вбок
-        const rails = stairRails(s, lay, wallPolys(project, level.id), null);
+        // перила марша — не упасть с лестницы вбок (без перил лестницы, стоящей сверху)
+        const rails = stairRails(s, lay, wallPolys(project, level.id), null, { blocked: stairFootprintsAbove(project, s) });
         for (const l of rails.sides) this._addRail(l, base, RAIL_HEIGHT + 0.1);
       }
       // ограждение проёмов над лестницами с этажа ниже

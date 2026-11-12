@@ -7,7 +7,7 @@ import { COLORS, FLOOR_MATERIALS, TREAD, stairStyle } from '../../model/defaults
 import { stairLayout } from '../../geometry/stairGeometry.js';
 import { roofGeometry } from '../../geometry/roofGeometry.js';
 import { pointInPolygon } from '../../core/geometry.js';
-import { levelBelow, levelTop, getLevel, levelWallHeight, isAttic, isBasement } from '../../model/project.js';
+import { levelBelow, levelTop, getLevel, levelWallHeight, levelElevation, isAttic, isBasement } from '../../model/project.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
 import { computeWallGeometry } from '../../geometry/wallGeometry.js';
 import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT } from '../../geometry/stairRails.js';
@@ -82,8 +82,9 @@ export function buildStairs(project, levelId, base) {
     const m = mesh(geo, mat(s.color || COLORS.stair, { roughness: 0.6 }), { kind: 'stair', id: s.id });
     m.userData.edges = true;
     group.add(m);
-    // перила со свободных сторон маршей и площадок
-    const rails = stairRails(s, lay, wallPolys(project, levelId), null);
+    // перила со свободных сторон маршей и площадок; лестница, стоящая прямо
+    // над этой (марш в марш), не должна оставлять свои перила внутри неё
+    const rails = stairRails(s, lay, wallPolys(project, levelId), null, { blocked: stairFootprintsAbove(project, s) });
     if (rails.sides.length) {
       group.add(railingMesh(rails.sides.map((l) => l.map((p) => ({ ...p, h: base + p.h }))), RAIL_HEIGHT, { kind: 'stair', id: s.id }));
     }
@@ -108,6 +109,43 @@ export function buildStairGuards(project, levelId, base) {
 /** Многоугольники стен этажа (для поиска свободных сторон лестницы). */
 export function wallPolys(project, levelId) {
   return [...computeWallGeometry(project.walls.filter((w) => w.levelId === levelId)).values()].map((g) => g.poly);
+}
+
+/**
+ * Планы ступеней лестниц верхних этажей, которые стоят прямо над данной
+ * (пересекают её габарит с запасом на перила). Если этого не учитывать, у нижней
+ * лестницы перила оказываются внутри верхней — «перила не правильно стоят,
+ * когда лестницы друг над другом».
+ */
+export function stairFootprintsAbove(project, stair) {
+  const lay = stairLayout(stair, stairRise3D(project, stair));
+  const own = polyBounds(lay.outline);
+  const PAD = RAIL_HEIGHT + 0.15; // зона, куда могут попасть перила этой лестницы
+  const out = [];
+  for (const up of project.stairs) {
+    if (up.id === stair.id || up.levelId === stair.levelId) continue;
+    if (levelElevation(project, up.levelId) <= levelElevation(project, stair.levelId)) continue;
+    const ul = stairLayout(up, stairRise3D(project, up));
+    for (const st of ul.steps) {
+      const b = polyBounds(st.poly);
+      if (b.x1 > own.x0 - PAD && b.x0 < own.x1 + PAD && b.y1 > own.y0 - PAD && b.y0 < own.y1 + PAD) out.push(st.poly);
+    }
+  }
+  return out;
+}
+
+function polyBounds(poly) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const p of poly) {
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+  }
+  return { x0, y0, x1, y1 };
 }
 
 const STRINGER_T = 0.05; // толщина косоура
