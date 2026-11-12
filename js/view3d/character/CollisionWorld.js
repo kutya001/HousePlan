@@ -19,8 +19,8 @@ import { cellarEntries, RAIL_H } from '../../geometry/cellarEntry.js';
 import { levelFootprints } from '../../geometry/roomDetect.js';
 import { roofPlanes, roofHeightAt } from '../../geometry/roofGeometry.js';
 import { stairStyle, TREAD } from '../../model/defaults.js';
-import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT } from '../../geometry/stairRails.js';
-import { stairRise3D, wallPolys, stairFootprintsAbove } from '../builders/buildStructure.js';
+import { stairRails, RAIL_HEIGHT, GUARD_HEIGHT, stairFootprintsAbove, stairFootprintsOverOpening } from '../../geometry/stairRails.js';
+import { stairRise3D, wallPolys } from '../builders/buildStructure.js';
 
 /** Предметы, сквозь которые можно пройти, — только опора (ковёр) или вовсе ничего. */
 const FLAT = new Set(['rug']);
@@ -110,7 +110,8 @@ export class CollisionWorld {
       if (below) {
         const upper = wallPolys(project, level.id);
         for (const s of project.stairs.filter((x) => x.levelId === below.id)) {
-          const { guards } = stairRails(s, stairLayout(s, stairRise3D(project, s)), [], upper);
+          const lay = stairLayout(s, stairRise3D(project, s));
+          const { guards } = stairRails(s, lay, [], upper, { blocked: stairFootprintsOverOpening(project, level.id, lay.outline) });
           for (const l of guards) this._addRail(l.map((p) => ({ ...p, h: 0 })), base, GUARD_HEIGHT + 0.05);
         }
       }
